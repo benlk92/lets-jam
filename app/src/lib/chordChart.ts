@@ -55,9 +55,14 @@ function transposeToken(token: string, semitones: number): string {
 
 // A line counts as a chord line when every token containing a letter is
 // itself a valid chord token — lets bare punctuation ("A Bm D A ,") pass
-// through without disqualifying the line.
+// through without disqualifying the line. A trailing parenthetical, like
+// "C  G  (over verse)", is stripped before that check (real chord charts
+// commonly annotate a line this way) — the annotation itself still passes
+// through untouched in transposeChordChart since it never matches a chord
+// token.
 export function isChordLine(line: string): boolean {
-  const tokens = line.trim().split(/\s+/).filter(Boolean);
+  const withoutTrailingNote = line.replace(/\s*\([^()]*\)\s*$/, '');
+  const tokens = withoutTrailingNote.trim().split(/\s+/).filter(Boolean);
   const lettered = tokens.filter((t) => /[A-Za-z]/.test(t));
   if (lettered.length === 0) return false;
   return lettered.every((t) => CHORD_TOKEN.test(t));
