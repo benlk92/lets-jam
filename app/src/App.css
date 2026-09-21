@@ -805,6 +805,21 @@
   font-size: 14px;
 }
 
+.url-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.url-input-row .url-input {
+  flex: 1;
+}
+
+.icon-button-disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .chord-chart-editor {
   display: flex;
   flex-direction: column;

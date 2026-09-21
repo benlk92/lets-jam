@@ -191,6 +191,9 @@ export default function App() {
 
   const [activeSongId, setActiveSongId] = useState<string | null>(null);
   const [activeSongOrigin, setActiveSongOrigin] = useState<AssessmentOrigin>('results');
+  // Where "← Back" from the chord chart viewer returns to — 'assessment' when
+  // opened from there, 'results' when opened directly from a song row.
+  const [chordChartOrigin, setChordChartOrigin] = useState<'assessment' | 'results'>('assessment');
   const [tagEditorSongId, setTagEditorSongId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
@@ -456,6 +459,12 @@ export default function App() {
     setActiveSongId(song.id);
     setActiveSongOrigin(origin);
     goScreen('assessment');
+  }
+
+  function handleOpenChordChartFromRow(song: Song) {
+    setActiveSongId(song.id);
+    setChordChartOrigin('results');
+    goScreen('chordChart');
   }
 
   function handleToggleOpenUgOnTap(value: boolean) {
@@ -763,6 +772,7 @@ export default function App() {
           onOpenPickerChooser={() => goScreen('pickerChooser')}
           onToggleQueue={handleToggleQueue}
           onOpenAssessment={(song) => handleSelectSong(song, 'results')}
+          onOpenChordChart={handleOpenChordChartFromRow}
           queue={queue}
           canEdit={canEdit}
           isRandomTen={randomTenIds !== null}
@@ -839,14 +849,17 @@ export default function App() {
           onToggleMemorized={handleToggleMemorized}
           onSkip={handleSkipAssessment}
           onRetag={(song) => setTagEditorSongId(song.id)}
-          onOpenChordChart={() => goScreen('chordChart')}
+          onOpenChordChart={() => {
+            setChordChartOrigin('assessment');
+            goScreen('chordChart');
+          }}
           onBack={() => goScreen(activeSongOrigin)}
           backLabel={activeSongOrigin === 'queue' ? 'Back to queue' : 'Back to results'}
         />
       )}
 
       {screen === 'chordChart' && activeSong && (
-        <ChordChartViewer song={activeSong} onBack={() => goScreen('assessment')} />
+        <ChordChartViewer song={activeSong} onBack={() => goScreen(chordChartOrigin)} />
       )}
 
       {showFilters && (

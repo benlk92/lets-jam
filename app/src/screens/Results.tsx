@@ -35,6 +35,7 @@ interface ResultsProps {
   onOpenPickerChooser: () => void;
   onToggleQueue: (song: Song) => void;
   onOpenAssessment: (song: Song) => void;
+  onOpenChordChart: (song: Song) => void;
   queue: string[];
   canEdit: boolean;
   isRandomTen: boolean;
@@ -63,6 +64,7 @@ export default function Results({
   onOpenPickerChooser,
   onToggleQueue,
   onOpenAssessment,
+  onOpenChordChart,
   queue,
   canEdit,
   isRandomTen,
@@ -181,15 +183,26 @@ export default function Results({
                 </span>
               )}
               <div className="song-row-actions">
-                <a
-                  className="icon-button song-row-ug"
-                  href={song.ultimateGuitarUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={`Open Ultimate Guitar tab for ${song.title}`}
-                >
-                  🎼
-                </a>
+                {song.chordChart ? (
+                  <button
+                    type="button"
+                    className="icon-button song-row-ug"
+                    onClick={() => onOpenChordChart(song)}
+                    aria-label={`View chords and lyrics for ${song.title}`}
+                  >
+                    🎼
+                  </button>
+                ) : (
+                  <a
+                    className="icon-button song-row-ug"
+                    href={song.ultimateGuitarUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Open Ultimate Guitar tab for ${song.title}`}
+                  >
+                    🎼
+                  </a>
+                )}
                 {canEdit && (
                   <button
                     type="button"

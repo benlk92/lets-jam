@@ -58,16 +58,31 @@ export default function SongTagEditor({
         <div className="modal-body">
           <section className="tag-editor-row">
             <h3>Ultimate Guitar Link</h3>
-            <input
-              type="url"
-              className="url-input"
-              value={url}
-              placeholder="https://tabs.ultimate-guitar.com/…"
-              onChange={(e) => setUrl(e.target.value)}
-              onBlur={() => {
-                if (url !== song.ultimateGuitarUrl) onUpdateUrl(url);
-              }}
-            />
+            <div className="url-input-row">
+              <input
+                type="url"
+                className="url-input"
+                value={url}
+                placeholder="https://tabs.ultimate-guitar.com/…"
+                onChange={(e) => setUrl(e.target.value)}
+                onBlur={() => {
+                  if (url !== song.ultimateGuitarUrl) onUpdateUrl(url);
+                }}
+              />
+              <a
+                className={`icon-button ${!url.trim() ? 'icon-button-disabled' : ''}`}
+                href={url.trim() || undefined}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open Ultimate Guitar tab"
+                aria-disabled={!url.trim()}
+                onClick={(e) => {
+                  if (!url.trim()) e.preventDefault();
+                }}
+              >
+                ↗
+              </a>
+            </div>
           </section>
 
           <section className="tag-editor-row">
