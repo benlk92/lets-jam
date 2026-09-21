@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Category, Song, TagValue } from '../types';
 import { categoryValues } from '../lib/filtering';
+import { parseUltimateGuitarUrl } from '../lib/ultimateGuitar';
 import CategoryValueEditor from '../components/CategoryValueEditor';
 
 interface AddSongProps {
@@ -21,6 +22,16 @@ export default function AddSong({ categories, songs, onSave, onCancel }: AddSong
   const [tags, setTags] = useState<Record<string, TagValue>>({});
 
   const taggableCategories = categories.filter((c) => !c.computed);
+
+  // Only fills in blanks — never overwrites a title/artist the user already
+  // typed, so pasting the link first vs. last both work sensibly.
+  function handleUrlChange(value: string) {
+    setUrl(value);
+    const parsed = parseUltimateGuitarUrl(value);
+    if (!parsed) return;
+    if (!title.trim()) setTitle(parsed.title);
+    if (!artist.trim()) setArtist(parsed.artist);
+  }
 
   function setTag(categoryId: string, value: TagValue | null) {
     setTags((prev) => {
@@ -58,6 +69,18 @@ export default function AddSong({ categories, songs, onSave, onCancel }: AddSong
       <h2>Add Song</h2>
 
       <section className="tag-editor-row">
+        <h3>Ultimate Guitar Link</h3>
+        <input
+          type="url"
+          className="url-input"
+          value={url}
+          placeholder="https://tabs.ultimate-guitar.com/…"
+          onChange={(e) => handleUrlChange(e.target.value)}
+        />
+        <p className="modal-subtitle">Pasting a link fills in the title and artist below, if they're blank.</p>
+      </section>
+
+      <section className="tag-editor-row">
         <h3>Title</h3>
         <input
           className="url-input"
@@ -74,17 +97,6 @@ export default function AddSong({ categories, songs, onSave, onCancel }: AddSong
           value={artist}
           placeholder="Artist"
           onChange={(e) => setArtist(e.target.value)}
-        />
-      </section>
-
-      <section className="tag-editor-row">
-        <h3>Ultimate Guitar Link</h3>
-        <input
-          type="url"
-          className="url-input"
-          value={url}
-          placeholder="https://tabs.ultimate-guitar.com/…"
-          onChange={(e) => setUrl(e.target.value)}
         />
       </section>
 
