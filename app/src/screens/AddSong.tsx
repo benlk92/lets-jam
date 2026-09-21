@@ -3,11 +3,18 @@ import type { Category, Song, TagValue } from '../types';
 import { categoryValues } from '../lib/filtering';
 import { parseUltimateGuitarUrl } from '../lib/ultimateGuitar';
 import CategoryValueEditor from '../components/CategoryValueEditor';
+import ChordChartEditor from '../components/ChordChartEditor';
 
 interface AddSongProps {
   categories: Category[];
   songs: Song[];
-  onSave: (input: { title: string; artist: string; ultimateGuitarUrl: string; tags: Record<string, TagValue> }) => void;
+  onSave: (input: {
+    title: string;
+    artist: string;
+    ultimateGuitarUrl: string;
+    chordChart: string;
+    tags: Record<string, TagValue>;
+  }) => void;
   onCancel: () => void;
 }
 
@@ -19,6 +26,7 @@ export default function AddSong({ categories, songs, onSave, onCancel }: AddSong
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [url, setUrl] = useState('');
+  const [chordChart, setChordChart] = useState('');
   const [tags, setTags] = useState<Record<string, TagValue>>({});
 
   const taggableCategories = categories.filter((c) => !c.computed);
@@ -57,7 +65,7 @@ export default function AddSong({ categories, songs, onSave, onCancel }: AddSong
       if (!confirmed) return;
     }
 
-    onSave({ title: trimmedTitle, artist: trimmedArtist, ultimateGuitarUrl: url.trim(), tags });
+    onSave({ title: trimmedTitle, artist: trimmedArtist, ultimateGuitarUrl: url.trim(), chordChart, tags });
   }
 
   return (
@@ -78,6 +86,11 @@ export default function AddSong({ categories, songs, onSave, onCancel }: AddSong
           onChange={(e) => handleUrlChange(e.target.value)}
         />
         <p className="modal-subtitle">Pasting a link fills in the title and artist below, if they're blank.</p>
+      </section>
+
+      <section className="tag-editor-row">
+        <h3>Chord Chart / Lyrics</h3>
+        <ChordChartEditor value={chordChart} onChange={setChordChart} onCommit={setChordChart} />
       </section>
 
       <section className="tag-editor-row">

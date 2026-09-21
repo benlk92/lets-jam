@@ -27,6 +27,11 @@ export default defineConfig({
         // App-shell only — Supabase API calls are left to the network (no
         // offline data story yet; that's a separate, deliberate decision).
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // pdf.js (PDF chord-chart import) is a rarely-used, admin-only,
+        // already-lazy-loaded chunk — excluding it from the precache keeps
+        // every install's initial download lean; it's still a normal static
+        // file, just fetched over the network the first time it's used.
+        globIgnores: ['**/pdfImport-*.js'],
       },
     }),
   ],

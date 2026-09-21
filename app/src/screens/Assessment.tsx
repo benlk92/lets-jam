@@ -7,6 +7,7 @@ interface AssessmentProps {
   onToggleMemorized: (memorized: boolean) => void;
   onSkip: () => void;
   onRetag: (song: Song) => void;
+  onOpenChordChart: () => void;
   onBack: () => void;
   backLabel?: string;
 }
@@ -18,6 +19,7 @@ export default function Assessment({
   onToggleMemorized,
   onSkip,
   onRetag,
+  onOpenChordChart,
   onBack,
   backLabel = 'Back to results',
 }: AssessmentProps) {
@@ -33,6 +35,12 @@ export default function Assessment({
       <a className="btn btn-ghost" href={song.ultimateGuitarUrl} target="_blank" rel="noreferrer">
         Open chords / lyrics ↗
       </a>
+
+      {song.chordChart && (
+        <button type="button" className="btn btn-ghost" onClick={onOpenChordChart}>
+          View chord chart
+        </button>
+      )}
 
       <label className="memorized-toggle">
         <input type="checkbox" checked={song.memorized} onChange={(e) => onToggleMemorized(e.target.checked)} />

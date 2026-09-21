@@ -36,6 +36,7 @@ import {
   syncPendingWrites,
   updateRatingEntry,
   updateSongTag,
+  updateChordChart,
   updateSongUrl,
 } from './data/store';
 import { isNetworkError } from './data/offlineCache';
@@ -51,6 +52,7 @@ import Results from './screens/Results';
 import FiltersPanel from './screens/FiltersPanel';
 import SortPanel from './screens/SortPanel';
 import Assessment from './screens/Assessment';
+import ChordChartViewer from './screens/ChordChartViewer';
 import GapFill from './screens/GapFill';
 import Settings from './screens/Settings';
 import AddSong from './screens/AddSong';
@@ -67,6 +69,7 @@ type Screen =
   | 'pickerChooser'
   | 'results'
   | 'assessment'
+  | 'chordChart'
   | 'gapfill'
   | 'settings'
   | 'addsong'
@@ -498,6 +501,13 @@ export default function App() {
     });
   }
 
+  async function handleUpdateChordChart(songId: string, chordChart: string) {
+    await runOrAlertOffline(async () => {
+      const updated = await updateChordChart(songId, chordChart);
+      applySongUpdate(updated);
+    });
+  }
+
   // Rating/memorized from the tag editor use the same rateSong/setMemorized
   // path as Assessment — same offline-queueing behavior — but stay on the
   // modal instead of navigating to Results afterward.
@@ -666,6 +676,7 @@ export default function App() {
     title: string;
     artist: string;
     ultimateGuitarUrl: string;
+    chordChart: string;
     tags: Record<string, TagValue>;
   }) {
     await runOrAlertOffline(async () => {
@@ -828,9 +839,14 @@ export default function App() {
           onToggleMemorized={handleToggleMemorized}
           onSkip={handleSkipAssessment}
           onRetag={(song) => setTagEditorSongId(song.id)}
+          onOpenChordChart={() => goScreen('chordChart')}
           onBack={() => goScreen(activeSongOrigin)}
           backLabel={activeSongOrigin === 'queue' ? 'Back to queue' : 'Back to results'}
         />
+      )}
+
+      {screen === 'chordChart' && activeSong && (
+        <ChordChartViewer song={activeSong} onBack={() => goScreen('assessment')} />
       )}
 
       {showFilters && (
@@ -867,6 +883,7 @@ export default function App() {
           onClose={() => setTagEditorSongId(null)}
           onUpdateTag={(categoryId, value) => handleUpdateTag(tagEditorSong.id, categoryId, value)}
           onUpdateUrl={(url) => handleUpdateUrl(tagEditorSong.id, url)}
+          onUpdateChordChart={(chordChart) => handleUpdateChordChart(tagEditorSong.id, chordChart)}
           onToggleMemorized={(memorized) => handleTagEditorToggleMemorized(tagEditorSong.id, memorized)}
           onRate={(label) => handleTagEditorRate(tagEditorSong.id, label)}
           onDelete={() => handleDeleteSong(tagEditorSong.id)}

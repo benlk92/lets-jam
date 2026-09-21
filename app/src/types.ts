@@ -33,6 +33,9 @@ export interface Song {
   lastPlayedAt: string | null;
   lastRatingLabel: string | null;
   playCount: number;
+  // Freeform text — chord line directly above the lyric line it applies to,
+  // matching the plain-text format of an Ultimate Guitar chord-sheet export.
+  chordChart: string | null;
   tags: Record<string, TagValue>;
   // Category ids the song has been deliberately marked as not applying to
   // (from Gap-Fill's "Doesn't apply" option) — the tag itself stays blank

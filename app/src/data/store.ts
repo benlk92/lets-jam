@@ -25,6 +25,7 @@ function mapSongRow(row: any): Song {
     lastPlayedAt: row.last_played_at,
     lastRatingLabel: row.last_rating_label,
     playCount: row.play_count ?? 0,
+    chordChart: row.chord_chart ?? null,
     tags: row.tags ?? {},
     notApplicableCategories: row.not_applicable_categories ?? [],
   };
@@ -283,12 +284,14 @@ export async function addSong(input: {
   title: string;
   artist: string;
   ultimateGuitarUrl: string;
+  chordChart?: string;
   tags: Record<string, TagValue>;
 }): Promise<Song[]> {
   const { error } = await getSupabaseClient().from('songs').insert({
     title: input.title.trim(),
     artist: input.artist.trim(),
     ultimate_guitar_url: input.ultimateGuitarUrl.trim(),
+    chord_chart: input.chordChart?.trim() || null,
     tags: input.tags,
   });
   if (error) throw error;
@@ -299,6 +302,17 @@ export async function updateSongUrl(songId: string, url: string): Promise<Song> 
   const { data, error } = await getSupabaseClient()
     .from('songs')
     .update({ ultimate_guitar_url: url })
+    .eq('id', songId)
+    .select()
+    .single();
+  if (error) throw error;
+  return withComputedTags(mapSongRow(data));
+}
+
+export async function updateChordChart(songId: string, chordChart: string): Promise<Song> {
+  const { data, error } = await getSupabaseClient()
+    .from('songs')
+    .update({ chord_chart: chordChart.trim() || null })
     .eq('id', songId)
     .select()
     .single();

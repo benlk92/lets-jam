@@ -3,6 +3,7 @@ import type { Category, RatingScaleEntry, Song, TagValue } from '../types';
 import { categoryValues } from '../lib/filtering';
 import CategoryValueEditor from './CategoryValueEditor';
 import ChipGroup from './ChipGroup';
+import ChordChartEditor from './ChordChartEditor';
 
 interface SongTagEditorProps {
   song: Song;
@@ -12,6 +13,7 @@ interface SongTagEditorProps {
   onClose: () => void;
   onUpdateTag: (categoryId: string, value: TagValue | null) => void;
   onUpdateUrl: (url: string) => void;
+  onUpdateChordChart: (chordChart: string) => void;
   onToggleMemorized: (memorized: boolean) => void;
   onRate: (label: string) => void;
   onDelete: () => void;
@@ -26,12 +28,14 @@ export default function SongTagEditor({
   onClose,
   onUpdateTag,
   onUpdateUrl,
+  onUpdateChordChart,
   onToggleMemorized,
   onRate,
   onDelete,
   onClearNotApplicable,
 }: SongTagEditorProps) {
   const [url, setUrl] = useState(song.ultimateGuitarUrl);
+  const [chordChart, setChordChart] = useState(song.chordChart ?? '');
 
   function handleDelete() {
     const confirmed = window.confirm(`Delete "${song.title}" by ${song.artist}? This can't be undone.`);
@@ -62,6 +66,18 @@ export default function SongTagEditor({
               onChange={(e) => setUrl(e.target.value)}
               onBlur={() => {
                 if (url !== song.ultimateGuitarUrl) onUpdateUrl(url);
+              }}
+            />
+          </section>
+
+          <section className="tag-editor-row">
+            <h3>Chord Chart / Lyrics</h3>
+            <ChordChartEditor
+              value={chordChart}
+              onChange={setChordChart}
+              onCommit={(value) => {
+                setChordChart(value);
+                if (value !== (song.chordChart ?? '')) onUpdateChordChart(value);
               }}
             />
           </section>
