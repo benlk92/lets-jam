@@ -1,4 +1,5 @@
 import type { RatingScaleEntry, Song } from '../types';
+import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
 interface AssessmentProps {
   song: Song;
@@ -32,8 +33,13 @@ export default function Assessment({
       <h2>{song.title}</h2>
       <p className="modal-subtitle">{song.artist}</p>
 
-      <a className="btn btn-ghost" href={song.ultimateGuitarUrl} target="_blank" rel="noreferrer">
-        Open chords / lyrics ↗
+      <a
+        className="btn btn-ghost"
+        href={song.ultimateGuitarUrl || buildUltimateGuitarSearchUrl(song.title)}
+        target="_blank"
+        rel="noreferrer"
+      >
+        {song.ultimateGuitarUrl ? 'Open chords / lyrics ↗' : 'Search Ultimate Guitar ↗'}
       </a>
 
       {song.chordChart && (

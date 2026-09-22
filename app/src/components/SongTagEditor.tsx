@@ -4,6 +4,7 @@ import { categoryValues } from '../lib/filtering';
 import CategoryValueEditor from './CategoryValueEditor';
 import ChipGroup from './ChipGroup';
 import ChordChartEditor from './ChordChartEditor';
+import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
 interface SongTagEditorProps {
   song: Song;
@@ -70,15 +71,11 @@ export default function SongTagEditor({
                 }}
               />
               <a
-                className={`icon-button ${!url.trim() ? 'icon-button-disabled' : ''}`}
-                href={url.trim() || undefined}
+                className="icon-button"
+                href={url.trim() || buildUltimateGuitarSearchUrl(song.title)}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="Open Ultimate Guitar tab"
-                aria-disabled={!url.trim()}
-                onClick={(e) => {
-                  if (!url.trim()) e.preventDefault();
-                }}
+                aria-label={url.trim() ? 'Open Ultimate Guitar tab' : 'Search Ultimate Guitar'}
               >
                 ↗
               </a>

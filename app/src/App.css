@@ -815,11 +815,6 @@
   flex: 1;
 }
 
-.icon-button-disabled {
-  opacity: 0.35;
-  pointer-events: none;
-}
-
 .chord-chart-editor {
   display: flex;
   flex-direction: column;

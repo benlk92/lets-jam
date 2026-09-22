@@ -6,22 +6,18 @@
 // untouched); lyric lines, section headers ([Verse 1]), and tab/fretboard
 // diagrams are left completely alone.
 //
-// A chord name that gets longer or shorter when transposed (e.g. A -> A#)
+// A chord name that gets longer or shorter when transposed (e.g. A -> Bb)
 // will shift anything later on the same line by a character or two — an
 // inherent limitation of plain-text chord sheets, not something worth
 // solving by reflowing the whole chart.
 
-const CHROMATIC = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
+// The spelling each pitch class is displayed with — whichever of the
+// sharp/flat enharmonic pair has fewer accidentals in its own major key
+// (e.g. Eb, 3 flats, over D#, 9 sharps). F#/Gb is the one true tie (6
+// accidentals either way); by convention that's always spelled F#.
+const PITCH_CLASSES = ['A', 'Bb', 'B', 'C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab'];
 
-const FLAT_TO_SHARP: Record<string, string> = {
-  Ab: 'G#',
-  Bb: 'A#',
-  Cb: 'B',
-  Db: 'C#',
-  Eb: 'D#',
-  Fb: 'E',
-  Gb: 'F#',
-};
+const NATURAL_INDEX: Record<string, number> = { A: 0, B: 2, C: 3, D: 5, E: 7, F: 8, G: 10 };
 
 // Root + optional accidental, then a chord-quality suffix built only from
 // real chord-quality vocabulary (m, maj7, sus4, dim, add9, 7, ...) and
@@ -33,15 +29,13 @@ const QUALITY = '(?:maj|min|dim|aug|sus|add|no|m|M|[0-9#b+-])*';
 const CHORD_TOKEN = new RegExp(`^([A-G])([#b]?)(${QUALITY})(?:\\/([A-G])([#b]?))?$`);
 
 function noteIndex(letter: string, accidental: string): number {
-  const name = letter + accidental;
-  const normalized = accidental === 'b' ? (FLAT_TO_SHARP[name] ?? name) : name;
-  return CHROMATIC.indexOf(normalized);
+  const shift = accidental === '#' ? 1 : accidental === 'b' ? -1 : 0;
+  return (((NATURAL_INDEX[letter] + shift) % 12) + 12) % 12;
 }
 
 function transposeNote(letter: string, accidental: string, semitones: number): string {
   const idx = noteIndex(letter, accidental);
-  if (idx === -1) return letter + accidental;
-  return CHROMATIC[(((idx + semitones) % 12) + 12) % 12];
+  return PITCH_CLASSES[(idx + semitones) % 12];
 }
 
 function transposeToken(token: string, semitones: number): string {

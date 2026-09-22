@@ -18,6 +18,12 @@ function slugToWords(slug: string): string {
     .join(' ');
 }
 
+// No saved link for this song — send them to a UG title search instead of
+// a dead end.
+export function buildUltimateGuitarSearchUrl(title: string): string {
+  return `https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(title)}`;
+}
+
 export function parseUltimateGuitarUrl(url: string): { artist: string; title: string } | null {
   let pathname: string;
   try {

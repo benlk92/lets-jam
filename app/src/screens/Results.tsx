@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Category, CategoryFilter, FilterState, RatingScaleEntry, Song } from '../types';
 import { formatStaleness, stalenessDays } from '../lib/staleness';
+import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
 // Closes an open dropdown on a click anywhere outside its wrapper element.
 // Takes the useState setter directly (rather than a callback) so its
@@ -195,10 +196,14 @@ export default function Results({
                 ) : (
                   <a
                     className="icon-button song-row-ug"
-                    href={song.ultimateGuitarUrl}
+                    href={song.ultimateGuitarUrl || buildUltimateGuitarSearchUrl(song.title)}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label={`Open Ultimate Guitar tab for ${song.title}`}
+                    aria-label={
+                      song.ultimateGuitarUrl
+                        ? `Open Ultimate Guitar tab for ${song.title}`
+                        : `Search Ultimate Guitar for ${song.title}`
+                    }
                   >
                     🎼
                   </a>
