@@ -84,6 +84,7 @@ import AddSong from './screens/AddSong';
 import SongQueue from './screens/SongQueue';
 import Playlists from './screens/Playlists';
 import PlaylistDetailScreen from './screens/PlaylistDetail';
+import Matrix from './screens/Matrix';
 import SongTagEditor from './components/SongTagEditor';
 import './App.css';
 
@@ -102,7 +103,8 @@ type Screen =
   | 'addsong'
   | 'queue'
   | 'playlists'
-  | 'playlistDetail';
+  | 'playlistDetail'
+  | 'matrix';
 
 // Which category set feeds the shared 'picker' screen — the full Guided
 // Picker sequence, or just the single-step Genre Picker shortcut.
@@ -825,6 +827,30 @@ export default function App() {
     setPendingCount(pendingWriteCount());
   }
 
+  // Same routing Gap-Fill uses per category type — Memorized and the two
+  // Confidence categories are computed, not plain tags, so a generic write
+  // would just get silently overwritten on the next read. Memorized has no
+  // "unset" state (it's a real boolean column, always one or the other) and
+  // there's no "un-rate" action for a Confidence category, so tapping an
+  // already-checked box in either is a no-op rather than trying to clear
+  // it; every other category clears back to untagged like the rest of the
+  // app's single-select pickers already do.
+  async function handleMatrixSetTag(song: Song, categoryId: string, value: string) {
+    if (categoryId === 'memorized') {
+      const nextMemorized = value === 'Memorized';
+      if (song.memorized === nextMemorized) return;
+      await handleTagEditorToggleMemorized(song.id, nextMemorized);
+      return;
+    }
+    if (categoryId === 'performance_confidence' || categoryId === 'memorization_confidence') {
+      if (song.tags[categoryId] === value) return;
+      await handleTagEditorRate(song.id, value);
+      return;
+    }
+    const next = song.tags[categoryId] === value ? null : value;
+    await handleUpdateTag(song.id, categoryId, next);
+  }
+
   async function handleDeleteSong(songId: string) {
     await runOrAlertOffline(async () => {
       setSongs(await deleteSong(songId));
@@ -1063,6 +1089,7 @@ export default function App() {
           onOpenSettings={() => goScreen('settings')}
           onOpenQueue={() => goScreen('queue')}
           onOpenPlaylists={() => goScreen('playlists')}
+          onOpenMatrix={() => goScreen('matrix')}
           onOpenPickerChooser={() => goScreen('pickerChooser')}
           onToggleQueue={handleToggleQueue}
           onOpenAssessment={(song) => handleSelectSong(song, 'results')}
@@ -1148,6 +1175,16 @@ export default function App() {
           onAddSong={handleAddSongToPlaylistDetail}
           onLoadIntoQueue={handleLoadPlaylistIntoQueue}
           onBack={() => goScreen('playlists')}
+        />
+      )}
+
+      {screen === 'matrix' && (
+        <Matrix
+          songs={sortedSongs}
+          categories={categories}
+          ratingScale={ratingScale}
+          onSetTag={handleMatrixSetTag}
+          onBack={() => goScreen('results')}
         />
       )}
 

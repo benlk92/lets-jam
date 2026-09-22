@@ -1451,3 +1451,114 @@
   flex-shrink: 0;
   max-width: 120px;
 }
+
+/* Matrix */
+
+.screen.matrix {
+  max-height: 100svh;
+  overflow: hidden;
+}
+
+.matrix-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.matrix-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.matrix-table th,
+.matrix-table td {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.matrix-corner,
+.matrix-category-header,
+.matrix-value-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 6px 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.matrix-category-header {
+  text-align: center;
+  color: var(--text-h);
+}
+
+.matrix-value-header {
+  top: 33px;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.matrix-corner {
+  left: 0;
+  z-index: 5;
+  text-align: left;
+  color: var(--text-h);
+  width: 180px;
+  max-width: 180px;
+}
+
+.matrix-corner-sub {
+  top: 33px;
+  z-index: 5;
+}
+
+/* A fixed width (not just min-width) matters here — sticky positioning
+   doesn't shrink a column to fit, so without a hard cap this column
+   auto-sizes to the single longest song title in the whole table, and
+   being sticky, visually overlaps the first checkbox columns for every
+   other row instead of just running wide. */
+.matrix-row-header {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  text-align: left;
+  padding: 6px 10px;
+  width: 180px;
+  max-width: 180px;
+  overflow: hidden;
+}
+
+.matrix-row-header .song-title,
+.matrix-row-header .song-artist {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix-row-header .song-artist {
+  font-size: 12px;
+}
+
+.matrix-cell {
+  text-align: center;
+  padding: 4px 10px;
+}
+
+.matrix-cell input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.matrix-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  position: static;
+}

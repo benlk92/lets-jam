@@ -35,6 +35,7 @@ interface ResultsProps {
   onOpenSettings: () => void;
   onOpenQueue: () => void;
   onOpenPlaylists: () => void;
+  onOpenMatrix: () => void;
   onOpenPickerChooser: () => void;
   onToggleQueue: (song: Song) => void;
   onOpenAssessment: (song: Song) => void;
@@ -68,6 +69,7 @@ export default function Results({
   onOpenSettings,
   onOpenQueue,
   onOpenPlaylists,
+  onOpenMatrix,
   onOpenPickerChooser,
   onToggleQueue,
   onOpenAssessment,
@@ -142,6 +144,16 @@ export default function Results({
                     }}
                   >
                     Playlists{playlists.length > 0 ? ` (${playlists.length})` : ''}
+                  </button>
+                  <button
+                    type="button"
+                    className="dropdown-menu-item"
+                    onClick={() => {
+                      setShowMenu(false);
+                      onOpenMatrix();
+                    }}
+                  >
+                    Matrix
                   </button>
                 </div>
               )}
