@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Category, RatingScaleEntry, Song, TagValue } from '../types';
+import type { Category, RatingScaleEntry, Song, Space, TagValue } from '../types';
 import { categoryValues } from '../lib/filtering';
 import CategoryValueEditor from './CategoryValueEditor';
 import ChipGroup from './ChipGroup';
@@ -8,6 +8,7 @@ import AudioAttachment from './AudioAttachment';
 import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
 interface SongTagEditorProps {
+  space: Space;
   song: Song;
   categories: Category[];
   allSongs: Song[];
@@ -26,6 +27,7 @@ interface SongTagEditorProps {
 }
 
 export default function SongTagEditor({
+  space,
   song,
   categories,
   allSongs,
@@ -44,6 +46,7 @@ export default function SongTagEditor({
 }: SongTagEditorProps) {
   const [url, setUrl] = useState(song.ultimateGuitarUrl);
   const [chordChart, setChordChart] = useState(song.chordChart ?? '');
+  const isPopSongs = space === 'pop_songs';
 
   function handleDelete() {
     const confirmed = window.confirm(`Delete "${song.title}" by ${song.artist}? This can't be undone.`);
@@ -65,27 +68,31 @@ export default function SongTagEditor({
 
         <div className="modal-body">
           <section className="tag-editor-row">
-            <h3>Ultimate Guitar Link</h3>
+            <h3>{isPopSongs ? 'Ultimate Guitar Link' : 'Song Link'}</h3>
             <div className="url-input-row">
               <input
                 type="url"
                 className="url-input"
                 value={url}
-                placeholder="https://tabs.ultimate-guitar.com/…"
+                placeholder={isPopSongs ? 'https://tabs.ultimate-guitar.com/…' : 'https://…'}
                 onChange={(e) => setUrl(e.target.value)}
                 onBlur={() => {
                   if (url !== song.ultimateGuitarUrl) onUpdateUrl(url);
                 }}
               />
-              <a
-                className="icon-button"
-                href={url.trim() || buildUltimateGuitarSearchUrl(song.title)}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={url.trim() ? 'Open Ultimate Guitar tab' : 'Search Ultimate Guitar'}
-              >
-                ↗
-              </a>
+              {(url.trim() || isPopSongs) && (
+                <a
+                  className="icon-button"
+                  href={url.trim() || buildUltimateGuitarSearchUrl(song.title)}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={
+                    url.trim() ? (isPopSongs ? 'Open Ultimate Guitar tab' : 'Open link') : 'Search Ultimate Guitar'
+                  }
+                >
+                  ↗
+                </a>
+              )}
             </div>
           </section>
 

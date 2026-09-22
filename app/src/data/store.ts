@@ -1,4 +1,4 @@
-import type { Category, RatingScaleEntry, Song, TagValue } from '../types';
+import type { Category, RatingScaleEntry, Song, Space, TagValue } from '../types';
 import { getSupabaseClient } from './supabaseClient';
 import {
   enqueuePendingWrite,
@@ -7,12 +7,29 @@ import {
   loadSnapshot,
   removePendingWrite,
   saveSnapshot,
-  updateCachedSong,
+  updateCachedSong as updateCachedSongIn,
 } from './offlineCache';
 
 // Supabase-backed implementation of the data-access layer. Every screen
 // talks to this module only — this file is the entire surface area that
 // changed when the app moved off in-memory fixtures onto the real database.
+
+// Which space every read/write below is scoped to — set by the app once at
+// startup and again on every space switch (see App.tsx). Not a security
+// boundary (RLS doesn't check it); just which rows the client asks for.
+let currentSpace: Space = 'pop_songs';
+
+export function setCurrentSpace(space: Space) {
+  currentSpace = space;
+}
+
+export function getCurrentSpace(): Space {
+  return currentSpace;
+}
+
+function updateCachedSong(song: Song) {
+  updateCachedSongIn(currentSpace, song);
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapSongRow(row: any): Song {
@@ -98,8 +115,8 @@ function slugify(name: string, existingIds: string[]): string {
 // warm without a separate sync step — whatever the app last saw online is
 // what it falls back to if the next load has no connection.
 function cachePatch(patch: Partial<{ songs: Song[]; categories: Category[]; ratingScale: RatingScaleEntry[] }>) {
-  const current = loadSnapshot();
-  saveSnapshot({
+  const current = loadSnapshot(currentSpace);
+  saveSnapshot(currentSpace, {
     songs: current?.songs ?? [],
     categories: current?.categories ?? [],
     ratingScale: current?.ratingScale ?? [],
@@ -108,7 +125,7 @@ function cachePatch(patch: Partial<{ songs: Song[]; categories: Category[]; rati
 }
 
 export function loadCachedSnapshot() {
-  return loadSnapshot();
+  return loadSnapshot(currentSpace);
 }
 
 // Both the admin and viewer passphrase pass RLS reads, so "categories came
@@ -121,7 +138,7 @@ export async function getAppKeyRole(): Promise<'admin' | 'viewer' | null> {
 }
 
 export async function getSongs(): Promise<Song[]> {
-  const { data, error } = await getSupabaseClient().from('songs').select('*');
+  const { data, error } = await getSupabaseClient().from('songs').select('*').eq('space', currentSpace);
   if (error) throw error;
   const songs = data.map(mapSongRow).map(withComputedTags);
   cachePatch({ songs });
@@ -129,7 +146,11 @@ export async function getSongs(): Promise<Song[]> {
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const { data, error } = await getSupabaseClient().from('categories').select('*').order('sort_order');
+  const { data, error } = await getSupabaseClient()
+    .from('categories')
+    .select('*')
+    .eq('space', currentSpace)
+    .order('sort_order');
   if (error) throw error;
   const categories = data.map(mapCategoryRow);
   cachePatch({ categories });
@@ -171,7 +192,7 @@ async function performSetMemorized(songId: string, memorized: boolean): Promise<
 }
 
 function optimisticSong(songId: string, patch: Partial<Song>): Song | null {
-  const cached = loadSnapshot();
+  const cached = loadSnapshot(currentSpace);
   const existing = cached?.songs.find((s) => s.id === songId);
   if (!existing) return null;
   const updated = withComputedTags({ ...existing, ...patch });
@@ -186,7 +207,7 @@ export async function rateSong(songId: string, ratingLabel: string): Promise<Son
     return song;
   } catch (err) {
     if (!isNetworkError(err)) throw err;
-    const cached = loadSnapshot();
+    const cached = loadSnapshot(currentSpace);
     const existingPlayCount = cached?.songs.find((s) => s.id === songId)?.playCount ?? 0;
     const optimistic = optimisticSong(songId, {
       lastPlayedAt: new Date().toISOString(),
@@ -294,6 +315,7 @@ export async function addSong(input: {
     ultimate_guitar_url: input.ultimateGuitarUrl.trim(),
     chord_chart: input.chordChart?.trim() || null,
     tags: input.tags,
+    space: currentSpace,
   });
   if (error) throw error;
   return getSongs();
@@ -370,7 +392,10 @@ export async function deleteSong(songId: string): Promise<Song[]> {
 
 export async function addCategory(name: string): Promise<Category[]> {
   const client = getSupabaseClient();
-  const { data: existing, error: fetchError } = await client.from('categories').select('id, sort_order');
+  const { data: existing, error: fetchError } = await client
+    .from('categories')
+    .select('id, sort_order')
+    .eq('space', currentSpace);
   if (fetchError) throw fetchError;
 
   const id = slugify(
@@ -390,13 +415,18 @@ export async function addCategory(name: string): Promise<Category[]> {
     computed: false,
     guided_picker_enabled: true,
     sort_order: nextSortOrder,
+    space: currentSpace,
   });
   if (insertError) throw insertError;
   return getCategories();
 }
 
 export async function renameCategory(categoryId: string, name: string): Promise<Category[]> {
-  const { error } = await getSupabaseClient().from('categories').update({ name: name.trim() }).eq('id', categoryId);
+  const { error } = await getSupabaseClient()
+    .from('categories')
+    .update({ name: name.trim() })
+    .eq('id', categoryId)
+    .eq('space', currentSpace);
   if (error) throw error;
   return getCategories();
 }
@@ -406,7 +436,11 @@ export async function renameCategory(categoryId: string, name: string): Promise<
 // they already had under that key; nothing touches song data, matching the
 // JSONB "a key nobody reads is just inert" model.
 export async function retireCategory(categoryId: string): Promise<Category[]> {
-  const { error } = await getSupabaseClient().from('categories').delete().eq('id', categoryId);
+  const { error } = await getSupabaseClient()
+    .from('categories')
+    .delete()
+    .eq('id', categoryId)
+    .eq('space', currentSpace);
   if (error) throw error;
   return getCategories();
 }
@@ -414,7 +448,9 @@ export async function retireCategory(categoryId: string): Promise<Category[]> {
 export async function reorderCategories(orderedIds: string[]): Promise<Category[]> {
   const client = getSupabaseClient();
   const results = await Promise.all(
-    orderedIds.map((id, index) => client.from('categories').update({ sort_order: index }).eq('id', id)),
+    orderedIds.map((id, index) =>
+      client.from('categories').update({ sort_order: index }).eq('id', id).eq('space', currentSpace),
+    ),
   );
   const failed = results.find((r) => r.error);
   if (failed?.error) throw failed.error;
@@ -425,7 +461,8 @@ export async function setCategoryGuidedPickerEnabled(categoryId: string, enabled
   const { error } = await getSupabaseClient()
     .from('categories')
     .update({ guided_picker_enabled: enabled })
-    .eq('id', categoryId);
+    .eq('id', categoryId)
+    .eq('space', currentSpace);
   if (error) throw error;
   return getCategories();
 }
@@ -434,7 +471,8 @@ export async function setCategoryScatterPickerEnabled(categoryId: string, enable
   const { error } = await getSupabaseClient()
     .from('categories')
     .update({ scatter_picker_enabled: enabled })
-    .eq('id', categoryId);
+    .eq('id', categoryId)
+    .eq('space', currentSpace);
   if (error) throw error;
   return getCategories();
 }
@@ -451,11 +489,16 @@ export async function addCategoryValue(categoryId: string, value: string): Promi
     .from('categories')
     .select('values')
     .eq('id', categoryId)
+    .eq('space', currentSpace)
     .single();
   if (fetchError) throw fetchError;
 
   const nextValues = Array.from(new Set([...(existing.values ?? []), trimmed]));
-  const { error } = await client.from('categories').update({ values: nextValues }).eq('id', categoryId);
+  const { error } = await client
+    .from('categories')
+    .update({ values: nextValues })
+    .eq('id', categoryId)
+    .eq('space', currentSpace);
   if (error) throw error;
   return getCategories();
 }
@@ -468,7 +511,8 @@ export async function reorderCategoryValues(categoryId: string, orderedValues: s
   const { error } = await getSupabaseClient()
     .from('categories')
     .update({ values: orderedValues })
-    .eq('id', categoryId);
+    .eq('id', categoryId)
+    .eq('space', currentSpace);
   if (error) throw error;
   return getCategories();
 }
@@ -482,12 +526,14 @@ async function updateRegisteredValues(
     .from('categories')
     .select('values')
     .eq('id', categoryId)
+    .eq('space', currentSpace)
     .single();
   if (fetchError) throw fetchError;
   const { error } = await client
     .from('categories')
     .update({ values: transform(existing.values ?? []) })
-    .eq('id', categoryId);
+    .eq('id', categoryId)
+    .eq('space', currentSpace);
   if (error) throw error;
 }
 
@@ -497,7 +543,11 @@ export async function renameCategoryValue(
   newValue: string,
 ): Promise<{ songs: Song[]; categories: Category[] }> {
   const client = getSupabaseClient();
-  const { data, error } = await client.from('songs').select('id, tags');
+  // Category ids are only unique per space now, so this cascade must stay
+  // scoped to the current space too — otherwise a same-named category in
+  // the other space (e.g. both defining their own "genre") could get its
+  // songs' tags rewritten by a rename that has nothing to do with it.
+  const { data, error } = await client.from('songs').select('id, tags').eq('space', currentSpace);
   if (error) throw error;
 
   const writes = data.flatMap((row: { id: string; tags: Record<string, TagValue> }) => {
@@ -523,7 +573,7 @@ export async function deleteCategoryValue(
   value: string,
 ): Promise<{ songs: Song[]; categories: Category[] }> {
   const client = getSupabaseClient();
-  const { data, error } = await client.from('songs').select('id, tags');
+  const { data, error } = await client.from('songs').select('id, tags').eq('space', currentSpace);
   if (error) throw error;
 
   const writes = data.flatMap((row: { id: string; tags: Record<string, TagValue> }) => {

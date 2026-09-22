@@ -1,7 +1,8 @@
-import type { RatingScaleEntry, Song } from '../types';
+import type { RatingScaleEntry, Song, Space } from '../types';
 import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
 interface AssessmentProps {
+  space: Space;
   song: Song;
   ratingScale: RatingScaleEntry[];
   onRate: (label: string) => void;
@@ -14,6 +15,7 @@ interface AssessmentProps {
 }
 
 export default function Assessment({
+  space,
   song,
   ratingScale,
   onRate,
@@ -24,6 +26,7 @@ export default function Assessment({
   onBack,
   backLabel = 'Back to results',
 }: AssessmentProps) {
+  const isPopSongs = space === 'pop_songs';
   return (
     <div className="screen assessment">
       <button type="button" className="btn btn-ghost" onClick={onBack}>
@@ -33,14 +36,20 @@ export default function Assessment({
       <h2>{song.title}</h2>
       <p className="modal-subtitle">{song.artist}</p>
 
-      <a
-        className="btn btn-ghost"
-        href={song.ultimateGuitarUrl || buildUltimateGuitarSearchUrl(song.title)}
-        target="_blank"
-        rel="noreferrer"
-      >
-        {song.ultimateGuitarUrl ? 'Open chords / lyrics ↗' : 'Search Ultimate Guitar ↗'}
-      </a>
+      {(song.ultimateGuitarUrl || isPopSongs) && (
+        <a
+          className="btn btn-ghost"
+          href={song.ultimateGuitarUrl || buildUltimateGuitarSearchUrl(song.title)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {song.ultimateGuitarUrl
+            ? isPopSongs
+              ? 'Open chords / lyrics ↗'
+              : 'Open link ↗'
+            : 'Search Ultimate Guitar ↗'}
+        </a>
+      )}
 
       {song.chordChart && (
         <button type="button" className="btn btn-ghost" onClick={onOpenChordChart}>

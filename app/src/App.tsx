@@ -6,6 +6,7 @@ import type {
   RatingScaleEntry,
   Song,
   SortCriterion,
+  Space,
   TagValue,
 } from './types';
 import {
@@ -32,6 +33,7 @@ import {
   retireCategory,
   setCategoryGuidedPickerEnabled,
   setCategoryScatterPickerEnabled,
+  setCurrentSpace,
   setMemorized,
   syncPendingWrites,
   updateRatingEntry,
@@ -85,6 +87,13 @@ type PickerMode = 'full' | 'genre';
 // Where the Assessment screen should return to — Results (the default) or
 // the Song Queue, when a song was opened from there instead.
 type AssessmentOrigin = 'results' | 'queue';
+
+// Also the reset target on a space switch — a fresh space starts from the
+// same clean slate a first-ever visit would.
+const DEFAULT_SORT_CRITERIA: SortCriterion[] = [
+  { key: 'performance_confidence', direction: 'desc' },
+  { key: 'artist', direction: 'asc' },
+];
 
 const IDLE_MS = 60 * 60 * 1000;
 const LAST_ACTIVE_KEY = 'songapp:lastActiveAt';
@@ -172,6 +181,27 @@ function saveQueue(ids: string[]) {
   }
 }
 
+// Which of the two independent song libraries is active — device-local,
+// like the queue above, not something the passphrase or the data itself
+// determines.
+const SPACE_KEY = 'songapp:space';
+
+function loadSpace(): Space {
+  try {
+    return localStorage.getItem(SPACE_KEY) === 'circle_songs' ? 'circle_songs' : 'pop_songs';
+  } catch {
+    return 'pop_songs';
+  }
+}
+
+function saveSpace(space: Space) {
+  try {
+    localStorage.setItem(SPACE_KEY, space);
+  } catch {
+    // localStorage unavailable — reverts to Pop Songs next load
+  }
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('loading');
   const [categories, setCategories] = useState<Category[]>([]);
@@ -181,10 +211,7 @@ export default function App() {
   const [filters, setFilters] = useState<FilterState>({});
   const [includeUntagged, setIncludeUntagged] = useState(false);
   const [showStaleness, setShowStaleness] = useState(false);
-  const [sortCriteria, setSortCriteria] = useState<SortCriterion[]>([
-    { key: 'performance_confidence', direction: 'desc' },
-    { key: 'artist', direction: 'asc' },
-  ]);
+  const [sortCriteria, setSortCriteria] = useState<SortCriterion[]>(DEFAULT_SORT_CRITERIA);
   const [pickerStep, setPickerStep] = useState(0);
   const [pickerMode, setPickerMode] = useState<PickerMode>('full');
   // Song ids from the most recent "Random 10" pick — narrows the results
@@ -222,6 +249,9 @@ export default function App() {
   const [role, setRole] = useState<Role>(initialPassphrase?.role ?? 'admin');
   const canEdit = role === 'admin';
 
+  const [initialSpace] = useState(loadSpace);
+  const [space, setSpaceState] = useState<Space>(initialSpace);
+
   async function loadAppData() {
     try {
       const [s, c, r] = await Promise.all([getSongs(), getCategories(), getRatingScale()]);
@@ -254,6 +284,7 @@ export default function App() {
   }
 
   useEffect(() => {
+    setCurrentSpace(initialSpace);
     if (initialPassphrase) {
       initSupabaseClient(initialPassphrase.value);
       loadAppData();
@@ -329,6 +360,38 @@ export default function App() {
 
   function handleRemoveFromQueue(songId: string) {
     setQueue((prev) => prev.filter((id) => id !== songId));
+  }
+
+  // Switching spaces resets Filters/Sort to their defaults and clears the
+  // queue/Random-10 selection — those hold song ids from the space being
+  // left, which wouldn't resolve to anything in the new one. Rating scale
+  // isn't refetched: it's shared across both spaces.
+  async function handleSwitchSpace(next: Space) {
+    if (next === space) return;
+    setCurrentSpace(next);
+    setSpaceState(next);
+    saveSpace(next);
+    setFilters({});
+    setSortCriteria(DEFAULT_SORT_CRITERIA);
+    setRandomTenIds(null);
+    setQueue([]);
+    setShowFilters(false);
+    setShowSort(false);
+    setActiveSongId(null);
+    setTagEditorSongId(null);
+    setScreen('results');
+    try {
+      const [s, c] = await Promise.all([getSongs(), getCategories()]);
+      setSongs(s);
+      setCategories(c);
+      setIsOffline(false);
+    } catch (err) {
+      if (!isNetworkError(err)) throw err;
+      const cached = loadCachedSnapshot();
+      setSongs(cached?.songs ?? []);
+      setCategories(cached?.categories ?? []);
+      setIsOffline(true);
+    }
   }
 
   async function runOrAlertOffline(action: () => Promise<void>) {
@@ -774,6 +837,7 @@ export default function App() {
 
       {screen === 'results' && (
         <Results
+          space={space}
           songs={sortedSongs}
           totalCount={songs.length}
           ratingScale={ratingScale}
@@ -820,11 +884,19 @@ export default function App() {
           onOpenAddSong={() => goScreen('addsong')}
           openUgOnTap={openUgOnTap}
           onToggleOpenUgOnTap={handleToggleOpenUgOnTap}
+          space={space}
+          onSwitchSpace={handleSwitchSpace}
         />
       )}
 
       {screen === 'addsong' && (
-        <AddSong categories={categories} songs={songs} onSave={handleAddSong} onCancel={() => goScreen('settings')} />
+        <AddSong
+          space={space}
+          categories={categories}
+          songs={songs}
+          onSave={handleAddSong}
+          onCancel={() => goScreen('settings')}
+        />
       )}
 
       {screen === 'queue' && (
@@ -860,6 +932,7 @@ export default function App() {
 
       {screen === 'assessment' && activeSong && (
         <Assessment
+          space={space}
           song={activeSong}
           ratingScale={ratingScale}
           onRate={handleRate}
@@ -906,6 +979,7 @@ export default function App() {
       {tagEditorSong && (
         <SongTagEditor
           key={tagEditorSong.id}
+          space={space}
           song={tagEditorSong}
           categories={categories}
           allSongs={songs}

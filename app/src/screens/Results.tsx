@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Category, CategoryFilter, FilterState, RatingScaleEntry, Song } from '../types';
+import type { Category, CategoryFilter, FilterState, RatingScaleEntry, Song, Space } from '../types';
 import { formatStaleness, stalenessDays } from '../lib/staleness';
 import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
@@ -21,6 +21,7 @@ function useClickOutside(active: boolean, setActive: (value: boolean) => void) {
 }
 
 interface ResultsProps {
+  space: Space;
   songs: Song[];
   totalCount: number;
   ratingScale: RatingScaleEntry[];
@@ -50,6 +51,7 @@ function filterLabel(category: Category, filter: CategoryFilter): string {
 }
 
 export default function Results({
+  space,
   songs,
   totalCount,
   ratingScale,
@@ -72,6 +74,7 @@ export default function Results({
 }: ResultsProps) {
   const [showMenu, setShowMenu] = useState(false);
   const hamburgerRef = useClickOutside(showMenu, setShowMenu);
+  const isPopSongs = space === 'pop_songs';
 
   const activeFilterLabels = [
     ...(isRandomTen ? ['Random 10'] : []),
@@ -193,7 +196,7 @@ export default function Results({
                   >
                     🎼
                   </button>
-                ) : (
+                ) : song.ultimateGuitarUrl || isPopSongs ? (
                   <a
                     className="icon-button song-row-ug"
                     href={song.ultimateGuitarUrl || buildUltimateGuitarSearchUrl(song.title)}
@@ -201,12 +204,16 @@ export default function Results({
                     rel="noreferrer"
                     aria-label={
                       song.ultimateGuitarUrl
-                        ? `Open Ultimate Guitar tab for ${song.title}`
+                        ? isPopSongs
+                          ? `Open Ultimate Guitar tab for ${song.title}`
+                          : `Open link for ${song.title}`
                         : `Search Ultimate Guitar for ${song.title}`
                     }
                   >
                     🎼
                   </a>
+                ) : (
+                  <span className="icon-button song-row-ug song-row-ug-empty" aria-hidden="true" />
                 )}
                 {canEdit && (
                   <button

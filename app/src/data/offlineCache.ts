@@ -1,6 +1,13 @@
-import type { Category, RatingScaleEntry, Song } from '../types';
+import type { Category, RatingScaleEntry, Song, Space } from '../types';
 
-const SNAPSHOT_KEY = 'songapp:cache:v1';
+// One snapshot per space — switching spaces requires a live connection (the
+// switch itself re-fetches), so this only ever needs to hold whichever
+// space was active during the most recent online session, but keying it by
+// space still stops a stale Pop Songs cache from showing through while
+// offline in Circle Songs, or vice versa.
+function snapshotKey(space: Space): string {
+  return `songapp:cache:v1:${space}`;
+}
 const QUEUE_KEY = 'songapp:pendingWrites:v1';
 
 export interface Snapshot {
@@ -15,28 +22,28 @@ export type PendingWriteInput =
 
 export type PendingWrite = PendingWriteInput & { id: string; queuedAt: string };
 
-export function saveSnapshot(snapshot: Snapshot) {
+export function saveSnapshot(space: Space, snapshot: Snapshot) {
   try {
-    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
+    localStorage.setItem(snapshotKey(space), JSON.stringify(snapshot));
   } catch {
     // Storage unavailable or full — offline fallback just won't have data;
     // online usage is unaffected.
   }
 }
 
-export function loadSnapshot(): Snapshot | null {
+export function loadSnapshot(space: Space): Snapshot | null {
   try {
-    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    const raw = localStorage.getItem(snapshotKey(space));
     return raw ? (JSON.parse(raw) as Snapshot) : null;
   } catch {
     return null;
   }
 }
 
-export function updateCachedSong(song: Song) {
-  const snapshot = loadSnapshot();
+export function updateCachedSong(space: Space, song: Song) {
+  const snapshot = loadSnapshot(space);
   if (!snapshot) return;
-  saveSnapshot({
+  saveSnapshot(space, {
     ...snapshot,
     songs: snapshot.songs.map((s) => (s.id === song.id ? song : s)),
   });

@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import type { Category, Song, TagValue } from '../types';
+import type { Category, Song, Space, TagValue } from '../types';
 import { categoryValues } from '../lib/filtering';
 import { parseUltimateGuitarUrl } from '../lib/ultimateGuitar';
 import CategoryValueEditor from '../components/CategoryValueEditor';
 import ChordChartEditor from '../components/ChordChartEditor';
 
 interface AddSongProps {
+  space: Space;
   categories: Category[];
   songs: Song[];
   onSave: (input: {
@@ -22,7 +23,7 @@ function normalize(s: string): string {
   return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-export default function AddSong({ categories, songs, onSave, onCancel }: AddSongProps) {
+export default function AddSong({ space, categories, songs, onSave, onCancel }: AddSongProps) {
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [url, setUrl] = useState('');
@@ -30,11 +31,15 @@ export default function AddSong({ categories, songs, onSave, onCancel }: AddSong
   const [tags, setTags] = useState<Record<string, TagValue>>({});
 
   const taggableCategories = categories.filter((c) => !c.computed);
+  const isPopSongs = space === 'pop_songs';
 
   // Only fills in blanks — never overwrites a title/artist the user already
-  // typed, so pasting the link first vs. last both work sensibly.
+  // typed, so pasting the link first vs. last both work sensibly. Circle
+  // Songs' links aren't necessarily Ultimate Guitar's, so this auto-fill
+  // only makes sense for Pop Songs.
   function handleUrlChange(value: string) {
     setUrl(value);
+    if (!isPopSongs) return;
     const parsed = parseUltimateGuitarUrl(value);
     if (!parsed) return;
     if (!title.trim()) setTitle(parsed.title);
@@ -77,15 +82,17 @@ export default function AddSong({ categories, songs, onSave, onCancel }: AddSong
       <h2>Add Song</h2>
 
       <section className="tag-editor-row">
-        <h3>Ultimate Guitar Link</h3>
+        <h3>{isPopSongs ? 'Ultimate Guitar Link' : 'Song Link'}</h3>
         <input
           type="url"
           className="url-input"
           value={url}
-          placeholder="https://tabs.ultimate-guitar.com/…"
+          placeholder={isPopSongs ? 'https://tabs.ultimate-guitar.com/…' : 'https://…'}
           onChange={(e) => handleUrlChange(e.target.value)}
         />
-        <p className="modal-subtitle">Pasting a link fills in the title and artist below, if they're blank.</p>
+        {isPopSongs && (
+          <p className="modal-subtitle">Pasting a link fills in the title and artist below, if they're blank.</p>
+        )}
       </section>
 
       <section className="tag-editor-row">

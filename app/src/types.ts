@@ -1,3 +1,13 @@
+// Two independent song libraries sharing one app — never mixed, never
+// queried together. Not a security boundary (see the spaces migration);
+// purely a data partition the client filters/writes by.
+export type Space = 'pop_songs' | 'circle_songs';
+
+export const SPACE_LABELS: Record<Space, string> = {
+  pop_songs: 'Pop Songs',
+  circle_songs: 'Circle Songs',
+};
+
 export interface Category {
   id: string;
   name: string;

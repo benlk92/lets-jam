@@ -717,6 +717,10 @@
   font-size: 17px;
 }
 
+.song-row-ug-empty {
+  visibility: hidden;
+}
+
 .song-row-queue-btn-active {
   color: var(--accent);
 }
@@ -1109,6 +1113,15 @@
 .settings-section:first-of-type {
   border-top: none;
   padding-top: 0;
+}
+
+.settings-space-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-space-toggle .btn {
+  flex: 1;
 }
 
 .settings-song-search {

@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import type { Category, RatingScaleEntry, Song } from '../types';
+import type { Category, RatingScaleEntry, Song, Space } from '../types';
+import { SPACE_LABELS } from '../types';
 import { GENRE_CATEGORY_ID } from '../lib/filtering';
 import ManageValues from './ManageValues';
 
 interface SettingsProps {
+  space: Space;
+  onSwitchSpace: (space: Space) => void;
   categories: Category[];
   songs: Song[];
   ratingScale: RatingScaleEntry[];
@@ -31,6 +34,8 @@ interface SettingsProps {
 const SONG_SEARCH_LIMIT = 20;
 
 export default function Settings({
+  space,
+  onSwitchSpace,
   categories,
   songs,
   ratingScale,
@@ -118,6 +123,25 @@ export default function Settings({
         <button type="button" className="btn btn-primary" onClick={onOpenAddSong}>
           + Add Song
         </button>
+      </section>
+
+      <section className="settings-section">
+        <h2>Database</h2>
+        <p className="modal-subtitle">
+          Two separate song libraries — categories, tags, and songs never mix between them.
+        </p>
+        <div className="settings-space-toggle">
+          {(Object.keys(SPACE_LABELS) as Space[]).map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`btn ${s === space ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => onSwitchSpace(s)}
+            >
+              {SPACE_LABELS[s]}
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="settings-section">
