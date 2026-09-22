@@ -28,6 +28,16 @@ export function categoryValues(
   ratingScale?: RatingScaleEntry[],
   registeredValues?: string[],
 ): string[] {
+  // A computed boolean, not vocabulary that emerges from usage — always
+  // both options regardless of what any song currently has. Deriving this
+  // from what's actually on the songs (like the generic path below) means
+  // a roster with zero memorized songs yet — a freshly imported space, or
+  // just before the first song is ever marked — could only ever offer "Not
+  // memorized," with no option to pick the other one at all.
+  if (categoryId === 'memorized') {
+    return ['Memorized', 'Not memorized'];
+  }
+
   // Performance/Memorization Confidence have no independent value list of
   // their own to register (see Settings) — every rating-scale label is
   // always a valid option, even for a song that's never been rated, so
