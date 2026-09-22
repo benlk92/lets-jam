@@ -721,6 +721,11 @@
   visibility: hidden;
 }
 
+.song-row-view-lyrics {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .song-row-queue-btn-active {
   color: var(--accent);
 }
@@ -1123,6 +1128,15 @@
   background: var(--accent-bg);
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.chord-chart-recordings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 160px;
+  overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .chord-chart-body {

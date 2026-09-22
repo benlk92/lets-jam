@@ -4,6 +4,7 @@ import { transposeChordChart } from '../lib/chordChart';
 
 interface ChordChartViewerProps {
   song: Song;
+  loadAudioUrl: (path: string) => Promise<string>;
   onBack: () => void;
 }
 
@@ -18,7 +19,58 @@ const SPEED_PX_PER_SEC: Record<Exclude<Speed, 'off'>, number> = {
 
 const TICK_MS = 50;
 
-export default function ChordChartViewer({ song, onBack }: ChordChartViewerProps) {
+// Playback only — adding/renaming/removing recordings stays in the tag
+// editor. Fetched on demand, same as the tag editor's list, rather than the
+// moment this screen opens.
+function RecordingPlayback({
+  title,
+  path,
+  loadAudioUrl,
+}: {
+  title: string;
+  path: string;
+  loadAudioUrl: (path: string) => Promise<string>;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [url]);
+
+  async function handlePlay() {
+    setLoading(true);
+    setError(null);
+    try {
+      setUrl(await loadAudioUrl(path));
+    } catch {
+      setError("Couldn't load this recording.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="recording-row">
+      <div className="recording-row-main">
+        <span className="recording-title">{title}</span>
+        {url ? (
+          <audio className="audio-player" controls src={url} autoPlay />
+        ) : (
+          <button type="button" className="btn btn-ghost btn-small" disabled={loading} onClick={handlePlay}>
+            {loading ? 'Loading…' : '▶ Play'}
+          </button>
+        )}
+      </div>
+      {error && <p className="passphrase-error">{error}</p>}
+    </div>
+  );
+}
+
+export default function ChordChartViewer({ song, loadAudioUrl, onBack }: ChordChartViewerProps) {
   const [semitones, setSemitones] = useState(0);
   const [speed, setSpeed] = useState<Speed>('off');
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -78,11 +130,24 @@ export default function ChordChartViewer({ song, onBack }: ChordChartViewerProps
         ))}
       </div>
 
+      {song.recordings.length > 0 && (
+        <div className="chord-chart-recordings">
+          {song.recordings.map((recording) => (
+            <RecordingPlayback
+              key={recording.id}
+              title={recording.title}
+              path={recording.path}
+              loadAudioUrl={loadAudioUrl}
+            />
+          ))}
+        </div>
+      )}
+
       <div className="chord-chart-body" ref={bodyRef}>
         {song.chordChart ? (
           <pre className="chord-chart-text">{displayText}</pre>
         ) : (
-          <p className="chip-group-empty">No chord chart saved for this song yet.</p>
+          <p className="chip-group-empty">No lyrics saved for this song yet.</p>
         )}
       </div>
     </div>

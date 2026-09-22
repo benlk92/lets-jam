@@ -187,14 +187,14 @@ export default function Results({
                 </span>
               )}
               <div className="song-row-actions">
-                {song.chordChart ? (
+                {song.chordChart || song.recordings.length > 0 ? (
                   <button
                     type="button"
-                    className="icon-button song-row-ug"
+                    className="btn btn-ghost btn-small song-row-view-lyrics"
                     onClick={() => onOpenChordChart(song)}
-                    aria-label={`View chords and lyrics for ${song.title}`}
+                    aria-label={`View lyrics for ${song.title}`}
                   >
-                    🎼
+                    View Lyrics
                   </button>
                 ) : song.ultimateGuitarUrl || isPopSongs ? (
                   <a

@@ -957,7 +957,11 @@ export default function App() {
       )}
 
       {screen === 'chordChart' && activeSong && (
-        <ChordChartViewer song={activeSong} onBack={() => goScreen(chordChartOrigin)} />
+        <ChordChartViewer
+          song={activeSong}
+          loadAudioUrl={getSongAudioUrl}
+          onBack={() => goScreen(chordChartOrigin)}
+        />
       )}
 
       {showFilters && (
