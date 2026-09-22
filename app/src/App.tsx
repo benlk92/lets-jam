@@ -40,8 +40,9 @@ import {
   updateSongTag,
   updateChordChart,
   updateSongUrl,
-  uploadSongAudio,
-  removeSongAudio,
+  addSongRecording,
+  renameSongRecording,
+  removeSongRecording,
   getSongAudioUrl,
 } from './data/store';
 import { isNetworkError } from './data/offlineCache';
@@ -583,16 +584,23 @@ export default function App() {
     });
   }
 
-  async function handleUploadAudio(songId: string, file: File) {
+  async function handleAddRecording(songId: string, title: string, file: File) {
     await runOrAlertOffline(async () => {
-      const updated = await uploadSongAudio(songId, file);
+      const updated = await addSongRecording(songId, title, file);
       applySongUpdate(updated);
     });
   }
 
-  async function handleRemoveAudio(songId: string) {
+  async function handleRenameRecording(songId: string, recordingId: string, title: string) {
     await runOrAlertOffline(async () => {
-      const updated = await removeSongAudio(songId);
+      const updated = await renameSongRecording(songId, recordingId, title);
+      applySongUpdate(updated);
+    });
+  }
+
+  async function handleRemoveRecording(songId: string, recordingId: string) {
+    await runOrAlertOffline(async () => {
+      const updated = await removeSongRecording(songId, recordingId);
       applySongUpdate(updated);
     });
   }
@@ -988,8 +996,9 @@ export default function App() {
           onUpdateTag={(categoryId, value) => handleUpdateTag(tagEditorSong.id, categoryId, value)}
           onUpdateUrl={(url) => handleUpdateUrl(tagEditorSong.id, url)}
           onUpdateChordChart={(chordChart) => handleUpdateChordChart(tagEditorSong.id, chordChart)}
-          onUploadAudio={(file) => handleUploadAudio(tagEditorSong.id, file)}
-          onRemoveAudio={() => handleRemoveAudio(tagEditorSong.id)}
+          onAddRecording={(title, file) => handleAddRecording(tagEditorSong.id, title, file)}
+          onRenameRecording={(recordingId, title) => handleRenameRecording(tagEditorSong.id, recordingId, title)}
+          onRemoveRecording={(recordingId) => handleRemoveRecording(tagEditorSong.id, recordingId)}
           loadAudioUrl={getSongAudioUrl}
           onToggleMemorized={(memorized) => handleTagEditorToggleMemorized(tagEditorSong.id, memorized)}
           onRate={(label) => handleTagEditorRate(tagEditorSong.id, label)}

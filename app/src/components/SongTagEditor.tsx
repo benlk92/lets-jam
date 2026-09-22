@@ -17,8 +17,9 @@ interface SongTagEditorProps {
   onUpdateTag: (categoryId: string, value: TagValue | null) => void;
   onUpdateUrl: (url: string) => void;
   onUpdateChordChart: (chordChart: string) => void;
-  onUploadAudio: (file: File) => Promise<void>;
-  onRemoveAudio: () => Promise<void>;
+  onAddRecording: (title: string, file: File) => Promise<void>;
+  onRenameRecording: (recordingId: string, title: string) => Promise<void>;
+  onRemoveRecording: (recordingId: string) => Promise<void>;
   loadAudioUrl: (path: string) => Promise<string>;
   onToggleMemorized: (memorized: boolean) => void;
   onRate: (label: string) => void;
@@ -36,8 +37,9 @@ export default function SongTagEditor({
   onUpdateTag,
   onUpdateUrl,
   onUpdateChordChart,
-  onUploadAudio,
-  onRemoveAudio,
+  onAddRecording,
+  onRenameRecording,
+  onRemoveRecording,
   loadAudioUrl,
   onToggleMemorized,
   onRate,
@@ -109,13 +111,13 @@ export default function SongTagEditor({
           </section>
 
           <section className="tag-editor-row">
-            <h3>Recording</h3>
+            <h3>Recordings</h3>
             <AudioAttachment
-              key={song.audioPath ?? 'none'}
-              audioPath={song.audioPath}
+              recordings={song.recordings}
               loadAudioUrl={loadAudioUrl}
-              onUpload={onUploadAudio}
-              onRemove={onRemoveAudio}
+              onAdd={onAddRecording}
+              onRename={onRenameRecording}
+              onRemove={onRemoveRecording}
             />
           </section>
 

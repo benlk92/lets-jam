@@ -34,6 +34,16 @@ export interface RatingScaleEntry {
   intervalDays: number;
 }
 
+export interface SongRecording {
+  id: string;
+  title: string;
+  // Path within the private "audio" Storage bucket — not a playable URL by
+  // itself, fetched through an authenticated download (see
+  // getSongAudioUrl) so it stays behind the same passphrase gate as
+  // everything else.
+  path: string;
+}
+
 export interface Song {
   id: string;
   title: string;
@@ -46,12 +56,8 @@ export interface Song {
   // Freeform text — chord line directly above the lyric line it applies to,
   // matching the plain-text format of an Ultimate Guitar chord-sheet export.
   chordChart: string | null;
-  // Path of the song's attached recording within the private "audio"
-  // Storage bucket, or null if none is attached. Not a playable URL by
-  // itself — fetched through an authenticated download (see
-  // getSongAudioUrl) so it stays behind the same passphrase gate as
-  // everything else.
-  audioPath: string | null;
+  // In whatever order they were added — no cap, no manual reordering.
+  recordings: SongRecording[];
   tags: Record<string, TagValue>;
   // Category ids the song has been deliberately marked as not applying to
   // (from Gap-Fill's "Doesn't apply" option) — the tag itself stays blank

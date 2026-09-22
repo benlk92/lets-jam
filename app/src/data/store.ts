@@ -1,4 +1,4 @@
-import type { Category, RatingScaleEntry, Song, Space, TagValue } from '../types';
+import type { Category, RatingScaleEntry, Song, SongRecording, Space, TagValue } from '../types';
 import { getSupabaseClient } from './supabaseClient';
 import {
   enqueuePendingWrite,
@@ -43,7 +43,7 @@ function mapSongRow(row: any): Song {
     lastRatingLabel: row.last_rating_label,
     playCount: row.play_count ?? 0,
     chordChart: row.chord_chart ?? null,
-    audioPath: row.audio_path ?? null,
+    recordings: row.recordings ?? [],
     tags: row.tags ?? {},
     notApplicableCategories: row.not_applicable_categories ?? [],
   };
@@ -343,31 +343,54 @@ export async function updateChordChart(songId: string, chordChart: string): Prom
   return withComputedTags(mapSongRow(data));
 }
 
-// One recording per song — a fixed path plus upsert means a re-upload just
-// overwrites the previous file rather than accumulating orphaned objects.
-export async function uploadSongAudio(songId: string, file: File): Promise<Song> {
+async function fetchRecordings(
+  client: ReturnType<typeof getSupabaseClient>,
+  songId: string,
+): Promise<SongRecording[]> {
+  const { data, error } = await client.from('songs').select('recordings').eq('id', songId).single();
+  if (error) throw error;
+  return (data.recordings ?? []) as SongRecording[];
+}
+
+// No cap, and no reordering — recordings just stay in the order they were
+// added. Each gets its own object at {songId}/{recordingId} in the shared
+// "audio" bucket, so adding or removing one never touches another.
+export async function addSongRecording(songId: string, title: string, file: File): Promise<Song> {
   const client = getSupabaseClient();
+  const recordingId = crypto.randomUUID();
+  const path = `${songId}/${recordingId}`;
+
   const { error: uploadError } = await client.storage
     .from('audio')
-    .upload(songId, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+    .upload(path, file, { contentType: file.type || 'application/octet-stream' });
   if (uploadError) throw uploadError;
 
-  const { data, error } = await client.from('songs').update({ audio_path: songId }).eq('id', songId).select().single();
+  const existing = await fetchRecordings(client, songId);
+  const next: SongRecording[] = [...existing, { id: recordingId, title: title.trim(), path }];
+  const { data, error } = await client.from('songs').update({ recordings: next }).eq('id', songId).select().single();
   if (error) throw error;
   return withComputedTags(mapSongRow(data));
 }
 
-export async function removeSongAudio(songId: string): Promise<Song> {
+export async function renameSongRecording(songId: string, recordingId: string, title: string): Promise<Song> {
   const client = getSupabaseClient();
-  const { error: removeError } = await client.storage.from('audio').remove([songId]);
-  if (removeError) throw removeError;
+  const existing = await fetchRecordings(client, songId);
+  const next = existing.map((r) => (r.id === recordingId ? { ...r, title: title.trim() } : r));
+  const { data, error } = await client.from('songs').update({ recordings: next }).eq('id', songId).select().single();
+  if (error) throw error;
+  return withComputedTags(mapSongRow(data));
+}
 
-  const { data, error } = await client
-    .from('songs')
-    .update({ audio_path: null })
-    .eq('id', songId)
-    .select()
-    .single();
+export async function removeSongRecording(songId: string, recordingId: string): Promise<Song> {
+  const client = getSupabaseClient();
+  const existing = await fetchRecordings(client, songId);
+  const target = existing.find((r) => r.id === recordingId);
+  if (target) {
+    const { error: removeError } = await client.storage.from('audio').remove([target.path]);
+    if (removeError) throw removeError;
+  }
+  const next = existing.filter((r) => r.id !== recordingId);
+  const { data, error } = await client.from('songs').update({ recordings: next }).eq('id', songId).select().single();
   if (error) throw error;
   return withComputedTags(mapSongRow(data));
 }
