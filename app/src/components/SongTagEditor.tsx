@@ -4,6 +4,7 @@ import { categoryValues } from '../lib/filtering';
 import CategoryValueEditor from './CategoryValueEditor';
 import ChipGroup from './ChipGroup';
 import ChordChartEditor from './ChordChartEditor';
+import AudioAttachment from './AudioAttachment';
 import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
 interface SongTagEditorProps {
@@ -15,6 +16,9 @@ interface SongTagEditorProps {
   onUpdateTag: (categoryId: string, value: TagValue | null) => void;
   onUpdateUrl: (url: string) => void;
   onUpdateChordChart: (chordChart: string) => void;
+  onUploadAudio: (file: File) => Promise<void>;
+  onRemoveAudio: () => Promise<void>;
+  loadAudioUrl: (path: string) => Promise<string>;
   onToggleMemorized: (memorized: boolean) => void;
   onRate: (label: string) => void;
   onDelete: () => void;
@@ -30,6 +34,9 @@ export default function SongTagEditor({
   onUpdateTag,
   onUpdateUrl,
   onUpdateChordChart,
+  onUploadAudio,
+  onRemoveAudio,
+  loadAudioUrl,
   onToggleMemorized,
   onRate,
   onDelete,
@@ -91,6 +98,17 @@ export default function SongTagEditor({
                 setChordChart(value);
                 if (value !== (song.chordChart ?? '')) onUpdateChordChart(value);
               }}
+            />
+          </section>
+
+          <section className="tag-editor-row">
+            <h3>Recording</h3>
+            <AudioAttachment
+              key={song.audioPath ?? 'none'}
+              audioPath={song.audioPath}
+              loadAudioUrl={loadAudioUrl}
+              onUpload={onUploadAudio}
+              onRemove={onRemoveAudio}
             />
           </section>
 

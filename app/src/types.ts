@@ -36,6 +36,12 @@ export interface Song {
   // Freeform text — chord line directly above the lyric line it applies to,
   // matching the plain-text format of an Ultimate Guitar chord-sheet export.
   chordChart: string | null;
+  // Path of the song's attached recording within the private "audio"
+  // Storage bucket, or null if none is attached. Not a playable URL by
+  // itself — fetched through an authenticated download (see
+  // getSongAudioUrl) so it stays behind the same passphrase gate as
+  // everything else.
+  audioPath: string | null;
   tags: Record<string, TagValue>;
   // Category ids the song has been deliberately marked as not applying to
   // (from Gap-Fill's "Doesn't apply" option) — the tag itself stays blank

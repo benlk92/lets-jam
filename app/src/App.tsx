@@ -38,6 +38,9 @@ import {
   updateSongTag,
   updateChordChart,
   updateSongUrl,
+  uploadSongAudio,
+  removeSongAudio,
+  getSongAudioUrl,
 } from './data/store';
 import { isNetworkError } from './data/offlineCache';
 import { initSupabaseClient } from './data/supabaseClient';
@@ -517,6 +520,20 @@ export default function App() {
     });
   }
 
+  async function handleUploadAudio(songId: string, file: File) {
+    await runOrAlertOffline(async () => {
+      const updated = await uploadSongAudio(songId, file);
+      applySongUpdate(updated);
+    });
+  }
+
+  async function handleRemoveAudio(songId: string) {
+    await runOrAlertOffline(async () => {
+      const updated = await removeSongAudio(songId);
+      applySongUpdate(updated);
+    });
+  }
+
   // Rating/memorized from the tag editor use the same rateSong/setMemorized
   // path as Assessment — same offline-queueing behavior — but stay on the
   // modal instead of navigating to Results afterward.
@@ -897,6 +914,9 @@ export default function App() {
           onUpdateTag={(categoryId, value) => handleUpdateTag(tagEditorSong.id, categoryId, value)}
           onUpdateUrl={(url) => handleUpdateUrl(tagEditorSong.id, url)}
           onUpdateChordChart={(chordChart) => handleUpdateChordChart(tagEditorSong.id, chordChart)}
+          onUploadAudio={(file) => handleUploadAudio(tagEditorSong.id, file)}
+          onRemoveAudio={() => handleRemoveAudio(tagEditorSong.id)}
+          loadAudioUrl={getSongAudioUrl}
           onToggleMemorized={(memorized) => handleTagEditorToggleMemorized(tagEditorSong.id, memorized)}
           onRate={(label) => handleTagEditorRate(tagEditorSong.id, label)}
           onDelete={() => handleDeleteSong(tagEditorSong.id)}

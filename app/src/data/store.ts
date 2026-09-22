@@ -26,6 +26,7 @@ function mapSongRow(row: any): Song {
     lastRatingLabel: row.last_rating_label,
     playCount: row.play_count ?? 0,
     chordChart: row.chord_chart ?? null,
+    audioPath: row.audio_path ?? null,
     tags: row.tags ?? {},
     notApplicableCategories: row.not_applicable_categories ?? [],
   };
@@ -318,6 +319,45 @@ export async function updateChordChart(songId: string, chordChart: string): Prom
     .single();
   if (error) throw error;
   return withComputedTags(mapSongRow(data));
+}
+
+// One recording per song — a fixed path plus upsert means a re-upload just
+// overwrites the previous file rather than accumulating orphaned objects.
+export async function uploadSongAudio(songId: string, file: File): Promise<Song> {
+  const client = getSupabaseClient();
+  const { error: uploadError } = await client.storage
+    .from('audio')
+    .upload(songId, file, { upsert: true, contentType: file.type || 'application/octet-stream' });
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await client.from('songs').update({ audio_path: songId }).eq('id', songId).select().single();
+  if (error) throw error;
+  return withComputedTags(mapSongRow(data));
+}
+
+export async function removeSongAudio(songId: string): Promise<Song> {
+  const client = getSupabaseClient();
+  const { error: removeError } = await client.storage.from('audio').remove([songId]);
+  if (removeError) throw removeError;
+
+  const { data, error } = await client
+    .from('songs')
+    .update({ audio_path: null })
+    .eq('id', songId)
+    .select()
+    .single();
+  if (error) throw error;
+  return withComputedTags(mapSongRow(data));
+}
+
+// Storage RLS gates the download the same way it gates every table read, so
+// this can't just be a public URL — the blob is fetched through an
+// authenticated request and handed back as a local object URL. Callers own
+// revoking it (URL.revokeObjectURL) once they're done with it.
+export async function getSongAudioUrl(audioPath: string): Promise<string> {
+  const { data, error } = await getSupabaseClient().storage.from('audio').download(audioPath);
+  if (error) throw error;
+  return URL.createObjectURL(data);
 }
 
 export async function deleteSong(songId: string): Promise<Song[]> {
