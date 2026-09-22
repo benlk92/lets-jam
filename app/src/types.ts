@@ -76,3 +76,43 @@ export interface SortCriterion {
   key: string;
   direction: 'asc' | 'desc';
 }
+
+// A song's appearance in the working queue before it's saved — carries a
+// leader if it came from an imported playlist (see QueueState), so
+// re-saving over that playlist doesn't silently drop existing assignments.
+export interface QueueEntry {
+  songId: string;
+  leader: string | null;
+}
+
+// Which playlist (if any) the current queue was imported from — set by
+// "Load into queue" and cleared whenever the queue is emptied or a
+// different playlist is imported. Drives whether "Save" offers to update
+// that playlist in place or only to save as a new one.
+export interface QueueState {
+  entries: QueueEntry[];
+  importedFromPlaylistId: string | null;
+}
+
+// The row shown in the Playlists list — the full ordered song/leader list
+// is only fetched when a playlist is actually opened (see
+// getPlaylistDetail).
+export interface PlaylistSummary {
+  id: string;
+  name: string;
+  songCount: number;
+  createdAt: string;
+}
+
+export interface PlaylistSong {
+  songId: string;
+  title: string;
+  artist: string;
+  leader: string | null;
+}
+
+export interface PlaylistDetail {
+  id: string;
+  name: string;
+  songs: PlaylistSong[];
+}

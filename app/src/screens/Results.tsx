@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Category, CategoryFilter, FilterState, RatingScaleEntry, Song, Space } from '../types';
+import type { Category, CategoryFilter, FilterState, PlaylistSummary, QueueEntry, RatingScaleEntry, Song, Space } from '../types';
 import { formatStaleness, stalenessDays } from '../lib/staleness';
 import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
@@ -34,11 +34,14 @@ interface ResultsProps {
   onOpenSort: () => void;
   onOpenSettings: () => void;
   onOpenQueue: () => void;
+  onOpenPlaylists: () => void;
   onOpenPickerChooser: () => void;
   onToggleQueue: (song: Song) => void;
   onOpenAssessment: (song: Song) => void;
   onOpenChordChart: (song: Song) => void;
-  queue: string[];
+  queue: QueueEntry[];
+  playlists: PlaylistSummary[];
+  onAddSongToPlaylist: (playlistId: string, song: Song) => void;
   canEdit: boolean;
   isRandomTen: boolean;
 }
@@ -64,11 +67,14 @@ export default function Results({
   onOpenSort,
   onOpenSettings,
   onOpenQueue,
+  onOpenPlaylists,
   onOpenPickerChooser,
   onToggleQueue,
   onOpenAssessment,
   onOpenChordChart,
   queue,
+  playlists,
+  onAddSongToPlaylist,
   canEdit,
   isRandomTen,
 }: ResultsProps) {
@@ -76,12 +82,15 @@ export default function Results({
   const hamburgerRef = useClickOutside(showMenu, setShowMenu);
   const isPopSongs = space === 'pop_songs';
 
+  const [playlistPickerSongId, setPlaylistPickerSongId] = useState<string | null>(null);
+  const playlistPickerRef = useClickOutside(playlistPickerSongId !== null, () => setPlaylistPickerSongId(null));
+
   const activeFilterLabels = [
     ...(isRandomTen ? ['Random 10'] : []),
     ...categories.filter((c) => filters[c.id]).map((c) => filterLabel(c, filters[c.id])),
   ];
 
-  const queuedIds = useMemo(() => new Set(queue), [queue]);
+  const queuedIds = useMemo(() => new Set(queue.map((e) => e.songId)), [queue]);
 
   return (
     <div className="screen results">
@@ -123,6 +132,16 @@ export default function Results({
                     }}
                   >
                     Song Queue{queue.length > 0 ? ` (${queue.length})` : ''}
+                  </button>
+                  <button
+                    type="button"
+                    className="dropdown-menu-item"
+                    onClick={() => {
+                      setShowMenu(false);
+                      onOpenPlaylists();
+                    }}
+                  >
+                    Playlists{playlists.length > 0 ? ` (${playlists.length})` : ''}
                   </button>
                 </div>
               )}
@@ -224,6 +243,38 @@ export default function Results({
                   >
                     ⋮
                   </button>
+                )}
+                {canEdit && playlists.length > 0 && (
+                  <div
+                    className="song-row-playlist-picker-wrap"
+                    ref={playlistPickerSongId === song.id ? playlistPickerRef : undefined}
+                  >
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={() => setPlaylistPickerSongId((id) => (id === song.id ? null : song.id))}
+                      aria-label={`Add ${song.title} to a playlist`}
+                    >
+                      📋
+                    </button>
+                    {playlistPickerSongId === song.id && (
+                      <div className="dropdown-menu dropdown-menu-right dropdown-menu-row">
+                        {playlists.map((playlist) => (
+                          <button
+                            key={playlist.id}
+                            type="button"
+                            className="dropdown-menu-item"
+                            onClick={() => {
+                              onAddSongToPlaylist(playlist.id, song);
+                              setPlaylistPickerSongId(null);
+                            }}
+                          >
+                            {playlist.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {canEdit && (
                   <button

@@ -721,6 +721,17 @@
   visibility: hidden;
 }
 
+.song-row-playlist-picker-wrap {
+  position: relative;
+}
+
+.dropdown-menu-row {
+  top: 100%;
+  margin-top: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
 .song-row-view-lyrics {
   white-space: nowrap;
   flex-shrink: 0;
@@ -1401,4 +1412,42 @@
   padding: 10px;
   background: var(--surface);
   color: var(--text);
+}
+
+/* Playlists */
+
+.queue-save-section {
+  margin-top: 16px;
+}
+
+.playlist-detail-name {
+  background: transparent;
+  border: none;
+  color: var(--text-h);
+  font-weight: 700;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.playlist-detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.playlist-song-row {
+  gap: 10px;
+}
+
+.playlist-song-leader {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  flex-shrink: 0;
+  max-width: 120px;
 }

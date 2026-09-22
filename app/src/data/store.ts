@@ -1,4 +1,14 @@
-import type { Category, RatingScaleEntry, Song, SongRecording, Space, TagValue } from '../types';
+import type {
+  Category,
+  PlaylistDetail,
+  PlaylistSummary,
+  QueueEntry,
+  RatingScaleEntry,
+  Song,
+  SongRecording,
+  Space,
+  TagValue,
+} from '../types';
 import { getSupabaseClient } from './supabaseClient';
 import {
   enqueuePendingWrite,
@@ -654,4 +664,235 @@ export async function removeRatingEntry(label: string): Promise<RatingScaleEntry
   const { error } = await getSupabaseClient().from('rating_scale').delete().eq('label', label);
   if (error) throw error;
   return getRatingScale();
+}
+
+// --- Playlists ---
+// Saved, named, reordered song lists — an extension of the ephemeral queue
+// (which stays local-only). Scoped to whichever space is active, same as
+// songs/categories. playlist_songs is the join table holding order and
+// leader (see the migration for why those can't live on the song itself).
+
+export async function getPlaylists(): Promise<PlaylistSummary[]> {
+  const client = getSupabaseClient();
+  const { data: playlists, error } = await client
+    .from('playlists')
+    .select('id, name, created_at')
+    .eq('space', currentSpace)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  if (playlists.length === 0) return [];
+
+  const { data: songRows, error: songsError } = await client
+    .from('playlist_songs')
+    .select('playlist_id')
+    .in(
+      'playlist_id',
+      playlists.map((p: { id: string }) => p.id),
+    );
+  if (songsError) throw songsError;
+
+  const counts = new Map<string, number>();
+  for (const row of songRows as { playlist_id: string }[]) {
+    counts.set(row.playlist_id, (counts.get(row.playlist_id) ?? 0) + 1);
+  }
+
+  return playlists.map((p: { id: string; name: string; created_at: string }) => ({
+    id: p.id,
+    name: p.name,
+    songCount: counts.get(p.id) ?? 0,
+    createdAt: p.created_at,
+  }));
+}
+
+export async function getPlaylistDetail(playlistId: string): Promise<PlaylistDetail> {
+  const client = getSupabaseClient();
+  const [playlistResult, songsResult] = await Promise.all([
+    client.from('playlists').select('id, name').eq('id', playlistId).single(),
+    client
+      .from('playlist_songs')
+      .select('song_id, leader, songs(title, artist)')
+      .eq('playlist_id', playlistId)
+      .order('sort_order'),
+  ]);
+  if (playlistResult.error) throw playlistResult.error;
+  if (songsResult.error) throw songsResult.error;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = songsResult.data as any[];
+  return {
+    id: playlistResult.data.id,
+    name: playlistResult.data.name,
+    songs: rows.map((row) => ({
+      songId: row.song_id,
+      title: row.songs.title,
+      artist: row.songs.artist,
+      leader: row.leader,
+    })),
+  };
+}
+
+export async function createPlaylistFromQueue(name: string, entries: QueueEntry[]): Promise<string> {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from('playlists')
+    .insert({ name: name.trim(), space: currentSpace })
+    .select()
+    .single();
+  if (error) throw error;
+
+  if (entries.length > 0) {
+    const { error: songsError } = await client.from('playlist_songs').insert(
+      entries.map((entry, index) => ({
+        playlist_id: data.id,
+        song_id: entry.songId,
+        sort_order: index,
+        leader: entry.leader,
+      })),
+    );
+    if (songsError) throw songsError;
+  }
+  return data.id as string;
+}
+
+// Wholesale replace — used to "update" a playlist from an edited, re-saved
+// queue. Delete-then-insert rather than a diff; simple, and fine for a
+// single-admin app.
+export async function setPlaylistSongs(playlistId: string, entries: QueueEntry[]): Promise<void> {
+  const client = getSupabaseClient();
+  const { error: deleteError } = await client.from('playlist_songs').delete().eq('playlist_id', playlistId);
+  if (deleteError) throw deleteError;
+
+  if (entries.length === 0) return;
+  const { error: insertError } = await client.from('playlist_songs').insert(
+    entries.map((entry, index) => ({
+      playlist_id: playlistId,
+      song_id: entry.songId,
+      sort_order: index,
+      leader: entry.leader,
+    })),
+  );
+  if (insertError) throw insertError;
+}
+
+export async function renamePlaylist(playlistId: string, name: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('playlists').update({ name: name.trim() }).eq('id', playlistId);
+  if (error) throw error;
+}
+
+export async function deletePlaylist(playlistId: string): Promise<void> {
+  // playlist_songs rows cascade-delete via the foreign key.
+  const { error } = await getSupabaseClient().from('playlists').delete().eq('id', playlistId);
+  if (error) throw error;
+}
+
+// Appends at the end; a no-op if the song is already in the playlist
+// (silently, rather than erroring on the composite-key conflict) so the
+// Results-row picker and the tag editor's own search can both call this
+// without worrying about duplicates.
+export async function addSongToPlaylist(playlistId: string, songId: string): Promise<void> {
+  const client = getSupabaseClient();
+  const { data: existing, error: fetchError } = await client
+    .from('playlist_songs')
+    .select('song_id, sort_order')
+    .eq('playlist_id', playlistId);
+  if (fetchError) throw fetchError;
+  if (existing.some((row: { song_id: string }) => row.song_id === songId)) return;
+
+  const nextSortOrder =
+    existing.length > 0 ? Math.max(...existing.map((row: { sort_order: number }) => row.sort_order)) + 1 : 0;
+  const { error } = await client
+    .from('playlist_songs')
+    .insert({ playlist_id: playlistId, song_id: songId, sort_order: nextSortOrder, leader: null });
+  if (error) throw error;
+}
+
+export async function removeSongFromPlaylist(playlistId: string, songId: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('playlist_songs')
+    .delete()
+    .eq('playlist_id', playlistId)
+    .eq('song_id', songId);
+  if (error) throw error;
+}
+
+export async function setPlaylistSongLeader(
+  playlistId: string,
+  songId: string,
+  leader: string | null,
+): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('playlist_songs')
+    .update({ leader })
+    .eq('playlist_id', playlistId)
+    .eq('song_id', songId);
+  if (error) throw error;
+}
+
+export async function reorderPlaylistSongs(playlistId: string, orderedSongIds: string[]): Promise<void> {
+  const client = getSupabaseClient();
+  const results = await Promise.all(
+    orderedSongIds.map((songId, index) =>
+      client.from('playlist_songs').update({ sort_order: index }).eq('playlist_id', playlistId).eq('song_id', songId),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
+}
+
+// --- Playlist leaders (shared across both spaces) ---
+
+export async function getPlaylistLeaders(): Promise<string[]> {
+  const { data, error } = await getSupabaseClient().from('playlist_leaders').select('name').order('sort_order');
+  if (error) throw error;
+  return data.map((row: { name: string }) => row.name);
+}
+
+export async function addPlaylistLeader(name: string): Promise<string[]> {
+  const client = getSupabaseClient();
+  const { data: existing, error: fetchError } = await client.from('playlist_leaders').select('sort_order');
+  if (fetchError) throw fetchError;
+  const nextSortOrder =
+    existing.length > 0 ? Math.max(...existing.map((row: { sort_order: number }) => row.sort_order)) + 1 : 0;
+  const { error } = await client.from('playlist_leaders').insert({ name: name.trim(), sort_order: nextSortOrder });
+  if (error) throw error;
+  return getPlaylistLeaders();
+}
+
+export async function renamePlaylistLeader(oldName: string, newName: string): Promise<string[]> {
+  const client = getSupabaseClient();
+  const trimmed = newName.trim();
+  const { error } = await client.from('playlist_leaders').update({ name: trimmed }).eq('name', oldName);
+  if (error) throw error;
+
+  const { error: cascadeError } = await client
+    .from('playlist_songs')
+    .update({ leader: trimmed })
+    .eq('leader', oldName);
+  if (cascadeError) throw cascadeError;
+
+  return getPlaylistLeaders();
+}
+
+export async function removePlaylistLeader(name: string): Promise<string[]> {
+  const client = getSupabaseClient();
+  const { error } = await client.from('playlist_leaders').delete().eq('name', name);
+  if (error) throw error;
+
+  const { error: cascadeError } = await client
+    .from('playlist_songs')
+    .update({ leader: null })
+    .eq('leader', name);
+  if (cascadeError) throw cascadeError;
+
+  return getPlaylistLeaders();
+}
+
+export async function reorderPlaylistLeaders(orderedNames: string[]): Promise<string[]> {
+  const client = getSupabaseClient();
+  const results = await Promise.all(
+    orderedNames.map((name, index) => client.from('playlist_leaders').update({ sort_order: index }).eq('name', name)),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
+  return getPlaylistLeaders();
 }

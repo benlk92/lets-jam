@@ -29,6 +29,11 @@ interface SettingsProps {
   onOpenAddSong: () => void;
   openUgOnTap: boolean;
   onToggleOpenUgOnTap: (value: boolean) => void;
+  leaders: string[];
+  onAddLeader: (name: string) => void;
+  onRenameLeader: (oldName: string, newName: string) => void;
+  onRemoveLeader: (name: string) => void;
+  onReorderLeaders: (orderedNames: string[]) => void;
 }
 
 const SONG_SEARCH_LIMIT = 20;
@@ -58,6 +63,11 @@ export default function Settings({
   onOpenAddSong,
   openUgOnTap,
   onToggleOpenUgOnTap,
+  leaders,
+  onAddLeader,
+  onRenameLeader,
+  onRemoveLeader,
+  onReorderLeaders,
 }: SettingsProps) {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [valuesModalCategoryId, setValuesModalCategoryId] = useState<string | null>(null);
@@ -65,6 +75,8 @@ export default function Settings({
   const [newRatingLabel, setNewRatingLabel] = useState('');
   const [newRatingInterval, setNewRatingInterval] = useState('');
   const [songQuery, setSongQuery] = useState('');
+  const [editingLeader, setEditingLeader] = useState<string | null>(null);
+  const [newLeaderName, setNewLeaderName] = useState('');
 
   const valuesModalCategory = categories.find((c) => c.id === valuesModalCategoryId) ?? null;
 
@@ -81,6 +93,28 @@ export default function Settings({
     const next = [...categories];
     [next[index], next[target]] = [next[target], next[index]];
     onReorderCategories(next.map((c) => c.id));
+  }
+
+  function moveLeader(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= leaders.length) return;
+    const next = [...leaders];
+    [next[index], next[target]] = [next[target], next[index]];
+    onReorderLeaders(next);
+  }
+
+  function handleAddLeader() {
+    const name = newLeaderName.trim();
+    if (!name) return;
+    onAddLeader(name);
+    setNewLeaderName('');
+  }
+
+  function handleRemoveLeader(name: string) {
+    const confirmed = window.confirm(
+      `Remove "${name}" from the leaders list? Any playlist song currently assigned to them will show no leader instead.`,
+    );
+    if (confirmed) onRemoveLeader(name);
   }
 
   function handleAddCategory() {
@@ -381,6 +415,80 @@ export default function Settings({
             onChange={(e) => setNewRatingInterval(e.target.value)}
           />
           <button type="button" className="btn btn-primary" onClick={handleAddRating}>
+            Add
+          </button>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <h2>Playlist Leaders</h2>
+        <p className="modal-subtitle">
+          Shared across both databases. Shows up as the leader dropdown when assigning a leader to a song within a
+          playlist.
+        </p>
+
+        <div className="settings-category-list">
+          {leaders.map((leader, index) => (
+            <div key={leader} className="settings-category-row">
+              <div className="settings-reorder">
+                <button
+                  type="button"
+                  disabled={index === 0}
+                  onClick={() => moveLeader(index, -1)}
+                  aria-label={`Move ${leader} up`}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  disabled={index === leaders.length - 1}
+                  onClick={() => moveLeader(index, 1)}
+                  aria-label={`Move ${leader} down`}
+                >
+                  ↓
+                </button>
+              </div>
+
+              {editingLeader === leader ? (
+                <input
+                  autoFocus
+                  className="settings-category-name-input"
+                  defaultValue={leader}
+                  onBlur={(e) => {
+                    const name = e.target.value.trim();
+                    if (name && name !== leader) onRenameLeader(leader, name);
+                    setEditingLeader(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                />
+              ) : (
+                <button type="button" className="settings-category-name" onClick={() => setEditingLeader(leader)}>
+                  {leader}
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => handleRemoveLeader(leader)}
+                aria-label={`Remove ${leader}`}
+              >
+                🗑
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="settings-add-row">
+          <input
+            className="settings-add-name"
+            placeholder="Leader name"
+            value={newLeaderName}
+            onChange={(e) => setNewLeaderName(e.target.value)}
+          />
+          <button type="button" className="btn btn-primary" onClick={handleAddLeader}>
             Add
           </button>
         </div>

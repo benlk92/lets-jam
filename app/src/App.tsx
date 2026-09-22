@@ -3,6 +3,9 @@ import type {
   Category,
   CategoryFilter,
   FilterState,
+  PlaylistDetail,
+  PlaylistSummary,
+  QueueEntry,
   RatingScaleEntry,
   Song,
   SortCriterion,
@@ -44,6 +47,21 @@ import {
   renameSongRecording,
   removeSongRecording,
   getSongAudioUrl,
+  getPlaylists,
+  getPlaylistDetail,
+  createPlaylistFromQueue,
+  setPlaylistSongs,
+  renamePlaylist,
+  deletePlaylist,
+  addSongToPlaylist,
+  removeSongFromPlaylist,
+  setPlaylistSongLeader,
+  reorderPlaylistSongs,
+  getPlaylistLeaders,
+  addPlaylistLeader,
+  renamePlaylistLeader,
+  removePlaylistLeader,
+  reorderPlaylistLeaders,
 } from './data/store';
 import { isNetworkError } from './data/offlineCache';
 import { initSupabaseClient } from './data/supabaseClient';
@@ -63,6 +81,8 @@ import GapFill from './screens/GapFill';
 import Settings from './screens/Settings';
 import AddSong from './screens/AddSong';
 import SongQueue from './screens/SongQueue';
+import Playlists from './screens/Playlists';
+import PlaylistDetailScreen from './screens/PlaylistDetail';
 import SongTagEditor from './components/SongTagEditor';
 import './App.css';
 
@@ -79,7 +99,9 @@ type Screen =
   | 'gapfill'
   | 'settings'
   | 'addsong'
-  | 'queue';
+  | 'queue'
+  | 'playlists'
+  | 'playlistDetail';
 
 // Which category set feeds the shared 'picker' screen — the full Guided
 // Picker sequence, or just the single-step Genre Picker shortcut.
@@ -158,25 +180,44 @@ function loadOpenUgOnTap(): boolean {
   }
 }
 
-// The performance queue — song ids, in the order they were added. Purely a
-// device-local session aid (not song data, and admin-only), so it lives in
-// localStorage rather than the database like openUgOnTap above.
-const QUEUE_KEY = 'songapp:queue:v1';
+// The performance queue — songs (each carrying a leader, if it came from an
+// imported playlist), in the order they were added. Purely a device-local
+// session aid (not song data, and admin-only), so it lives in localStorage
+// rather than the database like openUgOnTap above. v2: entries carry a
+// leader alongside the song id, and the queue remembers which playlist (if
+// any) it was imported from, so "Save" can offer to update that playlist
+// in place instead of only ever creating a new one.
+const QUEUE_KEY = 'songapp:queue:v2';
 
-function loadQueue(): string[] {
+interface StoredQueueState {
+  entries: QueueEntry[];
+  importedFromPlaylistId: string | null;
+}
+
+function loadQueueState(): StoredQueueState {
   try {
     const raw = localStorage.getItem(QUEUE_KEY);
-    if (!raw) return [];
+    if (!raw) return { entries: [], importedFromPlaylistId: null };
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+    const entries: QueueEntry[] = Array.isArray(parsed?.entries)
+      ? parsed.entries
+          .filter((e: unknown): e is { songId: unknown; leader: unknown } => typeof e === 'object' && e !== null)
+          .filter((e: { songId: unknown }) => typeof e.songId === 'string')
+          .map((e: { songId: unknown; leader: unknown }) => ({
+            songId: e.songId as string,
+            leader: typeof e.leader === 'string' ? e.leader : null,
+          }))
+      : [];
+    const importedFromPlaylistId = typeof parsed?.importedFromPlaylistId === 'string' ? parsed.importedFromPlaylistId : null;
+    return { entries, importedFromPlaylistId };
   } catch {
-    return [];
+    return { entries: [], importedFromPlaylistId: null };
   }
 }
 
-function saveQueue(ids: string[]) {
+function saveQueueState(state: StoredQueueState) {
   try {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(ids));
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(state));
   } catch {
     // localStorage unavailable — queue just won't survive a reload
   }
@@ -229,7 +270,16 @@ export default function App() {
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [openUgOnTap, setOpenUgOnTapState] = useState(loadOpenUgOnTap);
-  const [queue, setQueue] = useState<string[]>(loadQueue);
+  const [initialQueueState] = useState(loadQueueState);
+  const [queue, setQueue] = useState<QueueEntry[]>(initialQueueState.entries);
+  const [importedFromPlaylistId, setImportedFromPlaylistId] = useState<string | null>(
+    initialQueueState.importedFromPlaylistId,
+  );
+
+  const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
+  const [leaders, setLeaders] = useState<string[]>([]);
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+  const [activePlaylist, setActivePlaylist] = useState<PlaylistDetail | null>(null);
 
   const [gapFillQueue, setGapFillQueue] = useState<GapFillQueue | null>(null);
   const [gapFillIndex, setGapFillIndex] = useState(0);
@@ -255,10 +305,18 @@ export default function App() {
 
   async function loadAppData() {
     try {
-      const [s, c, r] = await Promise.all([getSongs(), getCategories(), getRatingScale()]);
+      const [s, c, r, p, l] = await Promise.all([
+        getSongs(),
+        getCategories(),
+        getRatingScale(),
+        getPlaylists(),
+        getPlaylistLeaders(),
+      ]);
       setSongs(s);
       setCategories(c);
       setRatingScale(r);
+      setPlaylists(p);
+      setLeaders(l);
       setIsOffline(false);
       setOfflineUnavailable(false);
       setScreen(initialResume ? 'results' : 'splash');
@@ -352,21 +410,154 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    saveQueue(queue);
-  }, [queue]);
+    saveQueueState({ entries: queue, importedFromPlaylistId });
+  }, [queue, importedFromPlaylistId]);
 
   function handleToggleQueue(song: Song) {
-    setQueue((prev) => (prev.includes(song.id) ? prev.filter((id) => id !== song.id) : [...prev, song.id]));
+    setQueue((prev) =>
+      prev.some((e) => e.songId === song.id)
+        ? prev.filter((e) => e.songId !== song.id)
+        : [...prev, { songId: song.id, leader: null }],
+    );
   }
 
   function handleRemoveFromQueue(songId: string) {
-    setQueue((prev) => prev.filter((id) => id !== songId));
+    setQueue((prev) => prev.filter((e) => e.songId !== songId));
+  }
+
+  // Saving links the queue to the new playlist — further edits and a
+  // subsequent "Update" target it, matching ordinary "Save As" behavior.
+  async function handleSaveQueueAsNewPlaylist(name: string) {
+    await runOrAlertOffline(async () => {
+      const id = await createPlaylistFromQueue(name, queue);
+      setPlaylists(await getPlaylists());
+      setImportedFromPlaylistId(id);
+    });
+  }
+
+  async function handleUpdatePlaylistFromQueue() {
+    if (!importedFromPlaylistId) return;
+    await runOrAlertOffline(async () => {
+      await setPlaylistSongs(importedFromPlaylistId, queue);
+      setPlaylists(await getPlaylists());
+    });
+  }
+
+  async function handleOpenPlaylist(id: string) {
+    await runOrAlertOffline(async () => {
+      const detail = await getPlaylistDetail(id);
+      setActivePlaylistId(id);
+      setActivePlaylist(detail);
+      setScreen('playlistDetail');
+    });
+  }
+
+  async function handleRenamePlaylist(name: string) {
+    if (!activePlaylistId) return;
+    await runOrAlertOffline(async () => {
+      await renamePlaylist(activePlaylistId, name);
+      const [detail, list] = await Promise.all([getPlaylistDetail(activePlaylistId), getPlaylists()]);
+      setActivePlaylist(detail);
+      setPlaylists(list);
+    });
+  }
+
+  async function handleDeletePlaylist() {
+    if (!activePlaylistId) return;
+    await runOrAlertOffline(async () => {
+      await deletePlaylist(activePlaylistId);
+      setPlaylists(await getPlaylists());
+      if (importedFromPlaylistId === activePlaylistId) setImportedFromPlaylistId(null);
+      setActivePlaylistId(null);
+      setActivePlaylist(null);
+      setScreen('playlists');
+    });
+  }
+
+  async function handlePlaylistSetLeader(songId: string, leader: string | null) {
+    if (!activePlaylistId) return;
+    await runOrAlertOffline(async () => {
+      await setPlaylistSongLeader(activePlaylistId, songId, leader);
+      setActivePlaylist(await getPlaylistDetail(activePlaylistId));
+    });
+  }
+
+  async function handleReorderPlaylistSongs(orderedSongIds: string[]) {
+    if (!activePlaylistId) return;
+    await runOrAlertOffline(async () => {
+      await reorderPlaylistSongs(activePlaylistId, orderedSongIds);
+      setActivePlaylist(await getPlaylistDetail(activePlaylistId));
+    });
+  }
+
+  async function handleRemoveSongFromPlaylist(songId: string) {
+    if (!activePlaylistId) return;
+    await runOrAlertOffline(async () => {
+      await removeSongFromPlaylist(activePlaylistId, songId);
+      const [detail, list] = await Promise.all([getPlaylistDetail(activePlaylistId), getPlaylists()]);
+      setActivePlaylist(detail);
+      setPlaylists(list);
+    });
+  }
+
+  async function handleAddSongToPlaylistDetail(songId: string) {
+    if (!activePlaylistId) return;
+    await runOrAlertOffline(async () => {
+      await addSongToPlaylist(activePlaylistId, songId);
+      const [detail, list] = await Promise.all([getPlaylistDetail(activePlaylistId), getPlaylists()]);
+      setActivePlaylist(detail);
+      setPlaylists(list);
+    });
+  }
+
+  async function handleAddSongToPlaylistFromResults(playlistId: string, song: Song) {
+    await runOrAlertOffline(async () => {
+      await addSongToPlaylist(playlistId, song.id);
+      setPlaylists(await getPlaylists());
+      if (activePlaylistId === playlistId) setActivePlaylist(await getPlaylistDetail(playlistId));
+    });
+  }
+
+  // No network needed — just seeds the queue from the already-loaded
+  // playlist detail (including each song's leader, so it round-trips
+  // through an edit-and-resave without needing to reassign anything).
+  function handleLoadPlaylistIntoQueue() {
+    if (!activePlaylist) return;
+    setQueue(activePlaylist.songs.map((s) => ({ songId: s.songId, leader: s.leader })));
+    setImportedFromPlaylistId(activePlaylist.id);
+    setScreen('queue');
+  }
+
+  async function handleAddLeader(name: string) {
+    await runOrAlertOffline(async () => {
+      setLeaders(await addPlaylistLeader(name));
+    });
+  }
+
+  async function handleRenameLeader(oldName: string, newName: string) {
+    await runOrAlertOffline(async () => {
+      setLeaders(await renamePlaylistLeader(oldName, newName));
+      if (activePlaylistId) setActivePlaylist(await getPlaylistDetail(activePlaylistId));
+    });
+  }
+
+  async function handleRemoveLeader(name: string) {
+    await runOrAlertOffline(async () => {
+      setLeaders(await removePlaylistLeader(name));
+      if (activePlaylistId) setActivePlaylist(await getPlaylistDetail(activePlaylistId));
+    });
+  }
+
+  async function handleReorderLeaders(orderedNames: string[]) {
+    await runOrAlertOffline(async () => {
+      setLeaders(await reorderPlaylistLeaders(orderedNames));
+    });
   }
 
   // Switching spaces resets Filters/Sort to their defaults and clears the
   // queue/Random-10 selection — those hold song ids from the space being
   // left, which wouldn't resolve to anything in the new one. Rating scale
-  // isn't refetched: it's shared across both spaces.
+  // and leaders aren't refetched: both are shared across both spaces.
   async function handleSwitchSpace(next: Space) {
     if (next === space) return;
     setCurrentSpace(next);
@@ -376,21 +567,26 @@ export default function App() {
     setSortCriteria(DEFAULT_SORT_CRITERIA);
     setRandomTenIds(null);
     setQueue([]);
+    setImportedFromPlaylistId(null);
     setShowFilters(false);
     setShowSort(false);
     setActiveSongId(null);
     setTagEditorSongId(null);
+    setActivePlaylistId(null);
+    setActivePlaylist(null);
     setScreen('results');
     try {
-      const [s, c] = await Promise.all([getSongs(), getCategories()]);
+      const [s, c, p] = await Promise.all([getSongs(), getCategories(), getPlaylists()]);
       setSongs(s);
       setCategories(c);
+      setPlaylists(p);
       setIsOffline(false);
     } catch (err) {
       if (!isNetworkError(err)) throw err;
       const cached = loadCachedSnapshot();
       setSongs(cached?.songs ?? []);
       setCategories(cached?.categories ?? []);
+      setPlaylists([]);
       setIsOffline(true);
     }
   }
@@ -858,11 +1054,14 @@ export default function App() {
           onOpenSort={() => setShowSort(true)}
           onOpenSettings={() => goScreen('settings')}
           onOpenQueue={() => goScreen('queue')}
+          onOpenPlaylists={() => goScreen('playlists')}
           onOpenPickerChooser={() => goScreen('pickerChooser')}
           onToggleQueue={handleToggleQueue}
           onOpenAssessment={(song) => handleSelectSong(song, 'results')}
           onOpenChordChart={handleOpenChordChartFromRow}
           queue={queue}
+          playlists={playlists}
+          onAddSongToPlaylist={handleAddSongToPlaylistFromResults}
           canEdit={canEdit}
           isRandomTen={randomTenIds !== null}
         />
@@ -894,6 +1093,11 @@ export default function App() {
           onToggleOpenUgOnTap={handleToggleOpenUgOnTap}
           space={space}
           onSwitchSpace={handleSwitchSpace}
+          leaders={leaders}
+          onAddLeader={handleAddLeader}
+          onRenameLeader={handleRenameLeader}
+          onRemoveLeader={handleRemoveLeader}
+          onReorderLeaders={handleReorderLeaders}
         />
       )}
 
@@ -909,10 +1113,33 @@ export default function App() {
 
       {screen === 'queue' && (
         <SongQueue
-          songs={queue.map((id) => songs.find((s) => s.id === id)).filter((s): s is Song => !!s)}
+          songs={queue.map((e) => songs.find((s) => s.id === e.songId)).filter((s): s is Song => !!s)}
+          importedFromPlaylistName={playlists.find((p) => p.id === importedFromPlaylistId)?.name ?? null}
           onSelectSong={(song) => handleSelectSong(song, 'queue')}
           onRemove={handleRemoveFromQueue}
+          onSaveAsNew={handleSaveQueueAsNewPlaylist}
+          onUpdatePlaylist={handleUpdatePlaylistFromQueue}
           onBack={() => goScreen('results')}
+        />
+      )}
+
+      {screen === 'playlists' && (
+        <Playlists playlists={playlists} onOpenPlaylist={handleOpenPlaylist} onBack={() => goScreen('results')} />
+      )}
+
+      {screen === 'playlistDetail' && activePlaylist && (
+        <PlaylistDetailScreen
+          playlist={activePlaylist}
+          allSongs={songs}
+          leaders={leaders}
+          onRename={handleRenamePlaylist}
+          onDelete={handleDeletePlaylist}
+          onSetLeader={handlePlaylistSetLeader}
+          onReorder={handleReorderPlaylistSongs}
+          onRemoveSong={handleRemoveSongFromPlaylist}
+          onAddSong={handleAddSongToPlaylistDetail}
+          onLoadIntoQueue={handleLoadPlaylistIntoQueue}
+          onBack={() => goScreen('playlists')}
         />
       )}
 
