@@ -51,9 +51,9 @@ export default function Assessment({
         </a>
       )}
 
-      {song.chordChart && (
+      {(song.chordChart || song.recordings.length > 0) && (
         <button type="button" className="btn btn-ghost" onClick={onOpenChordChart}>
-          View chord chart
+          View Lyrics
         </button>
       )}
 
