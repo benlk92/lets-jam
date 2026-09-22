@@ -342,6 +342,17 @@ export async function updateSongUrl(songId: string, url: string): Promise<Song> 
   return withComputedTags(mapSongRow(data));
 }
 
+export async function updateSongTitleArtist(songId: string, title: string, artist: string): Promise<Song> {
+  const { data, error } = await getSupabaseClient()
+    .from('songs')
+    .update({ title: title.trim(), artist: artist.trim() })
+    .eq('id', songId)
+    .select()
+    .single();
+  if (error) throw error;
+  return withComputedTags(mapSongRow(data));
+}
+
 export async function updateChordChart(songId: string, chordChart: string): Promise<Song> {
   const { data, error } = await getSupabaseClient()
     .from('songs')

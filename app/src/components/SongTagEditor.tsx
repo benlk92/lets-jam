@@ -15,6 +15,7 @@ interface SongTagEditorProps {
   ratingScale: RatingScaleEntry[];
   onClose: () => void;
   onUpdateTag: (categoryId: string, value: TagValue | null) => void;
+  onUpdateTitleArtist: (title: string, artist: string) => void;
   onUpdateUrl: (url: string) => void;
   onUpdateChordChart: (chordChart: string) => void;
   onAddRecording: (title: string, file: File) => Promise<void>;
@@ -35,6 +36,7 @@ export default function SongTagEditor({
   ratingScale,
   onClose,
   onUpdateTag,
+  onUpdateTitleArtist,
   onUpdateUrl,
   onUpdateChordChart,
   onAddRecording,
@@ -46,6 +48,8 @@ export default function SongTagEditor({
   onDelete,
   onClearNotApplicable,
 }: SongTagEditorProps) {
+  const [title, setTitle] = useState(song.title);
+  const [artist, setArtist] = useState(song.artist);
   const [url, setUrl] = useState(song.ultimateGuitarUrl);
   const [chordChart, setChordChart] = useState(song.chordChart ?? '');
   const isPopSongs = space === 'pop_songs';
@@ -53,6 +57,14 @@ export default function SongTagEditor({
   function handleDelete() {
     const confirmed = window.confirm(`Delete "${song.title}" by ${song.artist}? This can't be undone.`);
     if (confirmed) onDelete();
+  }
+
+  function commitTitleArtist() {
+    const trimmedTitle = title.trim();
+    const trimmedArtist = artist.trim();
+    if (!trimmedTitle || !trimmedArtist) return;
+    if (trimmedTitle === song.title && trimmedArtist === song.artist) return;
+    onUpdateTitleArtist(trimmedTitle, trimmedArtist);
   }
 
   return (
@@ -69,6 +81,26 @@ export default function SongTagEditor({
         </header>
 
         <div className="modal-body">
+          <section className="tag-editor-row">
+            <h3>Title</h3>
+            <input
+              className="url-input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={commitTitleArtist}
+            />
+          </section>
+
+          <section className="tag-editor-row">
+            <h3>Artist</h3>
+            <input
+              className="url-input"
+              value={artist}
+              onChange={(e) => setArtist(e.target.value)}
+              onBlur={commitTitleArtist}
+            />
+          </section>
+
           <section className="tag-editor-row">
             <h3>{isPopSongs ? 'Ultimate Guitar Link' : 'Song Link'}</h3>
             <div className="url-input-row">

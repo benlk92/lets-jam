@@ -43,6 +43,7 @@ import {
   updateSongTag,
   updateChordChart,
   updateSongUrl,
+  updateSongTitleArtist,
   addSongRecording,
   renameSongRecording,
   removeSongRecording,
@@ -773,6 +774,13 @@ export default function App() {
     });
   }
 
+  async function handleUpdateTitleArtist(songId: string, title: string, artist: string) {
+    await runOrAlertOffline(async () => {
+      const updated = await updateSongTitleArtist(songId, title, artist);
+      applySongUpdate(updated);
+    });
+  }
+
   async function handleUpdateChordChart(songId: string, chordChart: string) {
     await runOrAlertOffline(async () => {
       const updated = await updateChordChart(songId, chordChart);
@@ -1225,6 +1233,7 @@ export default function App() {
           ratingScale={ratingScale}
           onClose={() => setTagEditorSongId(null)}
           onUpdateTag={(categoryId, value) => handleUpdateTag(tagEditorSong.id, categoryId, value)}
+          onUpdateTitleArtist={(title, artist) => handleUpdateTitleArtist(tagEditorSong.id, title, artist)}
           onUpdateUrl={(url) => handleUpdateUrl(tagEditorSong.id, url)}
           onUpdateChordChart={(chordChart) => handleUpdateChordChart(tagEditorSong.id, chordChart)}
           onAddRecording={(title, file) => handleAddRecording(tagEditorSong.id, title, file)}
