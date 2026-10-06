@@ -8,7 +8,7 @@ interface PlaylistMatrixProps {
 }
 
 export default function PlaylistMatrix({ history, onBack }: PlaylistMatrixProps) {
-  const { songs, appearances } = history;
+  const { appearances } = history;
   const [newestFirst, setNewestFirst] = useState(true);
 
   // Undated playlists have nothing to order by, so they always sit below the
@@ -21,6 +21,28 @@ export default function PlaylistMatrix({ history, onBack }: PlaylistMatrixProps)
     if (newestFirst) dated.reverse();
     return [...dated, ...undated];
   }, [history.playlists, newestFirst]);
+
+  // Columns follow the rows: the first playlist's songs (by artist), then
+  // whichever songs the second playlist adds that haven't appeared yet, and
+  // so on — so the dots form a staircase down the page instead of scattering
+  // alphabetically. Artist is only a sort key here; it isn't displayed.
+  const songs = useMemo(() => {
+    const byId = new Map(history.songs.map((song) => [song.songId, song]));
+    const placed = new Set<string>();
+    const ordered: PlaylistHistory['songs'] = [];
+    for (const playlist of playlists) {
+      const fresh = appearances
+        .filter((a) => a.playlistId === playlist.id && !placed.has(a.songId))
+        .map((a) => byId.get(a.songId))
+        .filter((song): song is PlaylistHistory['songs'][number] => song !== undefined)
+        .sort((a, b) => a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title));
+      for (const song of fresh) {
+        placed.add(song.songId);
+        ordered.push(song);
+      }
+    }
+    return ordered;
+  }, [history.songs, appearances, playlists]);
 
   const appearanceByCell = useMemo(() => {
     const map = new Map<string, { leader: string | null; position: number }>();
