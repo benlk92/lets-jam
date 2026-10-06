@@ -1562,3 +1562,71 @@
   color: var(--text-muted);
   position: static;
 }
+
+/* Playlist history matrix — reuses the Matrix screen's scroll/sticky styles */
+
+.pm-corner {
+  vertical-align: bottom;
+}
+
+.pm-corner-sub {
+  top: 170px;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.pm-song-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 170px;
+  min-width: 34px;
+  max-width: 34px;
+  padding: 6px 4px;
+  vertical-align: bottom;
+  color: var(--text-h);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.pm-song-title {
+  display: block;
+  max-height: 158px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  margin: 0 auto;
+}
+
+.pm-count-header {
+  position: sticky;
+  top: 170px;
+  z-index: 3;
+  padding: 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.pm-cell {
+  text-align: center;
+  padding: 6px 4px;
+  min-width: 34px;
+  height: 36px;
+}
+
+.pm-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 11px;
+  font-weight: 700;
+}

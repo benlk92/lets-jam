@@ -104,6 +104,12 @@ export interface PlaylistSummary {
   createdAt: string;
 }
 
+export interface PlaylistHistory {
+  playlists: { id: string; name: string }[];
+  songs: { songId: string; title: string; artist: string }[];
+  appearances: { playlistId: string; songId: string; leader: string | null; position: number }[];
+}
+
 export interface PlaylistSong {
   songId: string;
   title: string;

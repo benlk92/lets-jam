@@ -30,7 +30,7 @@ interface SettingsProps {
   openUgOnTap: boolean;
   onToggleOpenUgOnTap: (value: boolean) => void;
   leaders: string[];
-  onAddLeader: (name: string) => void;
+  onAddLeader: (name: string) => Promise<boolean>;
   onRenameLeader: (oldName: string, newName: string) => void;
   onRemoveLeader: (name: string) => void;
   onReorderLeaders: (orderedNames: string[]) => void;
@@ -103,11 +103,14 @@ export default function Settings({
     onReorderLeaders(next);
   }
 
-  function handleAddLeader() {
+  async function handleAddLeader() {
     const name = newLeaderName.trim();
     if (!name) return;
-    onAddLeader(name);
-    setNewLeaderName('');
+    if (leaders.some((l) => l.toLowerCase() === name.toLowerCase())) {
+      window.alert(`"${name}" is already in the leaders list.`);
+      return;
+    }
+    if (await onAddLeader(name)) setNewLeaderName('');
   }
 
   function handleRemoveLeader(name: string) {

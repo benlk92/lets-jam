@@ -4,6 +4,7 @@ import type {
   CategoryFilter,
   FilterState,
   PlaylistDetail,
+  PlaylistHistory,
   PlaylistSummary,
   QueueEntry,
   RatingScaleEntry,
@@ -50,6 +51,7 @@ import {
   getSongAudioUrl,
   getPlaylists,
   getPlaylistDetail,
+  getPlaylistHistory,
   createPlaylistFromQueue,
   setPlaylistSongs,
   renamePlaylist,
@@ -84,6 +86,7 @@ import AddSong from './screens/AddSong';
 import SongQueue from './screens/SongQueue';
 import Playlists from './screens/Playlists';
 import PlaylistDetailScreen from './screens/PlaylistDetail';
+import PlaylistMatrix from './screens/PlaylistMatrix';
 import Matrix from './screens/Matrix';
 import SongTagEditor from './components/SongTagEditor';
 import './App.css';
@@ -104,6 +107,7 @@ type Screen =
   | 'queue'
   | 'playlists'
   | 'playlistDetail'
+  | 'playlistMatrix'
   | 'matrix';
 
 // Which category set feeds the shared 'picker' screen — the full Guided
@@ -283,6 +287,7 @@ export default function App() {
   const [leaders, setLeaders] = useState<string[]>([]);
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [activePlaylist, setActivePlaylist] = useState<PlaylistDetail | null>(null);
+  const [playlistHistory, setPlaylistHistory] = useState<PlaylistHistory | null>(null);
 
   const [gapFillQueue, setGapFillQueue] = useState<GapFillQueue | null>(null);
   const [gapFillIndex, setGapFillIndex] = useState(0);
@@ -455,6 +460,13 @@ export default function App() {
     });
   }
 
+  async function handleOpenPlaylistMatrix() {
+    await runOrAlertOffline(async () => {
+      setPlaylistHistory(await getPlaylistHistory());
+      setScreen('playlistMatrix');
+    });
+  }
+
   async function handleRenamePlaylist(name: string) {
     if (!activePlaylistId) return;
     await runOrAlertOffline(async () => {
@@ -531,8 +543,8 @@ export default function App() {
     setScreen('queue');
   }
 
-  async function handleAddLeader(name: string) {
-    await runOrAlertOffline(async () => {
+  async function handleAddLeader(name: string): Promise<boolean> {
+    return runOrAlertOffline(async () => {
       setLeaders(await addPlaylistLeader(name));
     });
   }
@@ -594,12 +606,23 @@ export default function App() {
     }
   }
 
-  async function runOrAlertOffline(action: () => Promise<void>) {
+  // Returns whether the action succeeded. Non-network failures (a rejected
+  // write, a constraint violation) are surfaced too — rethrowing them from a
+  // click handler just becomes an unhandled rejection the user never sees,
+  // which reads as "the button does nothing."
+  async function runOrAlertOffline(action: () => Promise<void>): Promise<boolean> {
     try {
       await action();
+      return true;
     } catch (err) {
-      if (!isNetworkError(err)) throw err;
-      window.alert("You're offline — this needs a connection.");
+      if (isNetworkError(err)) {
+        window.alert("You're offline — this needs a connection.");
+      } else {
+        console.error(err);
+        const message = err instanceof Error ? err.message : (err as { message?: string })?.message;
+        window.alert(`That didn't save${message ? `: ${message}` : '.'}`);
+      }
+      return false;
     }
   }
 
@@ -1159,7 +1182,16 @@ export default function App() {
       )}
 
       {screen === 'playlists' && (
-        <Playlists playlists={playlists} onOpenPlaylist={handleOpenPlaylist} onBack={() => goScreen('results')} />
+        <Playlists
+          playlists={playlists}
+          onOpenPlaylist={handleOpenPlaylist}
+          onOpenMatrix={handleOpenPlaylistMatrix}
+          onBack={() => goScreen('results')}
+        />
+      )}
+
+      {screen === 'playlistMatrix' && playlistHistory && (
+        <PlaylistMatrix history={playlistHistory} onBack={() => goScreen('playlists')} />
       )}
 
       {screen === 'playlistDetail' && activePlaylist && (

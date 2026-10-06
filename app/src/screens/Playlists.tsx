@@ -3,10 +3,11 @@ import type { PlaylistSummary } from '../types';
 interface PlaylistsProps {
   playlists: PlaylistSummary[];
   onOpenPlaylist: (playlistId: string) => void;
+  onOpenMatrix: () => void;
   onBack: () => void;
 }
 
-export default function Playlists({ playlists, onOpenPlaylist, onBack }: PlaylistsProps) {
+export default function Playlists({ playlists, onOpenPlaylist, onOpenMatrix, onBack }: PlaylistsProps) {
   return (
     <div className="screen playlists">
       <button type="button" className="btn btn-ghost" onClick={onBack}>
@@ -15,6 +16,12 @@ export default function Playlists({ playlists, onOpenPlaylist, onBack }: Playlis
 
       <h2>Playlists</h2>
       <p className="modal-subtitle">Saved song lists — build one from the Song Queue screen, then reorder it here.</p>
+
+      {playlists.length > 0 && (
+        <button type="button" className="btn btn-ghost" onClick={onOpenMatrix}>
+          Song history matrix
+        </button>
+      )}
 
       <ul className="song-list">
         {playlists.map((playlist) => (

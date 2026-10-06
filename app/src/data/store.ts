@@ -1,6 +1,7 @@
 import type {
   Category,
   PlaylistDetail,
+  PlaylistHistory,
   PlaylistSummary,
   QueueEntry,
   RatingScaleEntry,
@@ -713,6 +714,46 @@ export async function getPlaylists(): Promise<PlaylistSummary[]> {
     songCount: counts.get(p.id) ?? 0,
     createdAt: p.created_at,
   }));
+}
+
+// Every playlist in the active space with every song that has appeared on
+// at least one of them — the raw material for the playlist history matrix.
+export async function getPlaylistHistory(): Promise<PlaylistHistory> {
+  const client = getSupabaseClient();
+  const { data: playlists, error } = await client
+    .from('playlists')
+    .select('id, name')
+    .eq('space', currentSpace)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  if (playlists.length === 0) return { playlists: [], songs: [], appearances: [] };
+
+  const { data, error: rowsError } = await client
+    .from('playlist_songs')
+    .select('playlist_id, song_id, leader, sort_order, songs(title, artist)')
+    .in(
+      'playlist_id',
+      playlists.map((p: { id: string }) => p.id),
+    );
+  if (rowsError) throw rowsError;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = data as any[];
+  const songsById = new Map<string, { songId: string; title: string; artist: string }>();
+  for (const row of rows) {
+    songsById.set(row.song_id, { songId: row.song_id, title: row.songs.title, artist: row.songs.artist });
+  }
+
+  return {
+    playlists,
+    songs: [...songsById.values()].sort((a, b) => a.title.localeCompare(b.title)),
+    appearances: rows.map((row) => ({
+      playlistId: row.playlist_id,
+      songId: row.song_id,
+      leader: row.leader,
+      position: row.sort_order + 1,
+    })),
+  };
 }
 
 export async function getPlaylistDetail(playlistId: string): Promise<PlaylistDetail> {
