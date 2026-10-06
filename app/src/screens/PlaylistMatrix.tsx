@@ -33,7 +33,7 @@ export default function PlaylistMatrix({ history, onBack }: PlaylistMatrixProps)
         playlist; the letter is who led it, if one was set.
       </p>
 
-      <div className="matrix-scroll">
+      <div className="matrix-scroll pm-scroll">
         <table className="matrix-table">
           <thead>
             <tr>
