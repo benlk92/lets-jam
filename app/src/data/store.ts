@@ -688,8 +688,9 @@ export async function getPlaylists(): Promise<PlaylistSummary[]> {
   const client = getSupabaseClient();
   const { data: playlists, error } = await client
     .from('playlists')
-    .select('id, name, created_at')
+    .select('id, name, created_at, show_date')
     .eq('space', currentSpace)
+    .order('show_date', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });
   if (error) throw error;
   if (playlists.length === 0) return [];
@@ -708,11 +709,12 @@ export async function getPlaylists(): Promise<PlaylistSummary[]> {
     counts.set(row.playlist_id, (counts.get(row.playlist_id) ?? 0) + 1);
   }
 
-  return playlists.map((p: { id: string; name: string; created_at: string }) => ({
+  return playlists.map((p: { id: string; name: string; created_at: string; show_date: string | null }) => ({
     id: p.id,
     name: p.name,
     songCount: counts.get(p.id) ?? 0,
     createdAt: p.created_at,
+    showDate: p.show_date,
   }));
 }
 
@@ -722,7 +724,7 @@ export async function getPlaylistHistory(): Promise<PlaylistHistory> {
   const client = getSupabaseClient();
   const { data: playlists, error } = await client
     .from('playlists')
-    .select('id, name')
+    .select('id, name, show_date')
     .eq('space', currentSpace)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -745,7 +747,11 @@ export async function getPlaylistHistory(): Promise<PlaylistHistory> {
   }
 
   return {
-    playlists,
+    playlists: playlists.map((p: { id: string; name: string; show_date: string | null }) => ({
+      id: p.id,
+      name: p.name,
+      showDate: p.show_date,
+    })),
     songs: [...songsById.values()].sort((a, b) => a.title.localeCompare(b.title)),
     appearances: rows.map((row) => ({
       playlistId: row.playlist_id,
@@ -759,7 +765,7 @@ export async function getPlaylistHistory(): Promise<PlaylistHistory> {
 export async function getPlaylistDetail(playlistId: string): Promise<PlaylistDetail> {
   const client = getSupabaseClient();
   const [playlistResult, songsResult] = await Promise.all([
-    client.from('playlists').select('id, name').eq('id', playlistId).single(),
+    client.from('playlists').select('id, name, show_date').eq('id', playlistId).single(),
     client
       .from('playlist_songs')
       .select('song_id, leader, songs(title, artist)')
@@ -774,6 +780,7 @@ export async function getPlaylistDetail(playlistId: string): Promise<PlaylistDet
   return {
     id: playlistResult.data.id,
     name: playlistResult.data.name,
+    showDate: playlistResult.data.show_date,
     songs: rows.map((row) => ({
       songId: row.song_id,
       title: row.songs.title,
@@ -783,11 +790,15 @@ export async function getPlaylistDetail(playlistId: string): Promise<PlaylistDet
   };
 }
 
-export async function createPlaylistFromQueue(name: string, entries: QueueEntry[]): Promise<string> {
+export async function createPlaylistFromQueue(
+  name: string,
+  entries: QueueEntry[],
+  showDate: string | null,
+): Promise<string> {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from('playlists')
-    .insert({ name: name.trim(), space: currentSpace })
+    .insert({ name: name.trim(), space: currentSpace, show_date: showDate })
     .select()
     .single();
   if (error) throw error;
@@ -828,6 +839,11 @@ export async function setPlaylistSongs(playlistId: string, entries: QueueEntry[]
 
 export async function renamePlaylist(playlistId: string, name: string): Promise<void> {
   const { error } = await getSupabaseClient().from('playlists').update({ name: name.trim() }).eq('id', playlistId);
+  if (error) throw error;
+}
+
+export async function setPlaylistShowDate(playlistId: string, showDate: string | null): Promise<void> {
+  const { error } = await getSupabaseClient().from('playlists').update({ show_date: showDate }).eq('id', playlistId);
   if (error) throw error;
 }
 

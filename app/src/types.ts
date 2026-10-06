@@ -102,10 +102,11 @@ export interface PlaylistSummary {
   name: string;
   songCount: number;
   createdAt: string;
+  showDate: string | null;
 }
 
 export interface PlaylistHistory {
-  playlists: { id: string; name: string }[];
+  playlists: { id: string; name: string; showDate: string | null }[];
   songs: { songId: string; title: string; artist: string }[];
   appearances: { playlistId: string; songId: string; leader: string | null; position: number }[];
 }
@@ -120,5 +121,6 @@ export interface PlaylistSong {
 export interface PlaylistDetail {
   id: string;
   name: string;
+  showDate: string | null;
   songs: PlaylistSong[];
 }

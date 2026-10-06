@@ -6,6 +6,7 @@ interface PlaylistDetailProps {
   allSongs: Song[];
   leaders: string[];
   onRename: (name: string) => void;
+  onSetDate: (showDate: string | null) => void;
   onDelete: () => void;
   onSetLeader: (songId: string, leader: string | null) => void;
   onReorder: (orderedSongIds: string[]) => void;
@@ -22,6 +23,7 @@ export default function PlaylistDetailScreen({
   allSongs,
   leaders,
   onRename,
+  onSetDate,
   onDelete,
   onSetLeader,
   onReorder,
@@ -77,10 +79,22 @@ export default function PlaylistDetailScreen({
           }}
         />
       ) : (
-        <button type="button" className="playlist-detail-name" onClick={() => setEditingName(true)}>
-          {playlist.name}
-        </button>
+        <div className="playlist-detail-title-row">
+          <h2 className="playlist-detail-name">{playlist.name}</h2>
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => setEditingName(true)}>
+            Rename
+          </button>
+        </div>
       )}
+
+      <label className="playlist-detail-date">
+        <span>Show date</span>
+        <input
+          type="date"
+          value={playlist.showDate ?? ''}
+          onChange={(e) => onSetDate(e.target.value || null)}
+        />
+      </label>
 
       <div className="playlist-detail-actions">
         <button type="button" className="btn btn-ghost btn-small" onClick={onLoadIntoQueue}>

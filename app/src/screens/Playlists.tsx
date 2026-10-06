@@ -1,4 +1,5 @@
 import type { PlaylistSummary } from '../types';
+import { formatShowDate } from '../lib/showDate';
 
 interface PlaylistsProps {
   playlists: PlaylistSummary[];
@@ -29,6 +30,7 @@ export default function Playlists({ playlists, onOpenPlaylist, onOpenMatrix, onB
             <button type="button" className="song-row-main" onClick={() => onOpenPlaylist(playlist.id)}>
               <span className="song-title">{playlist.name}</span>
               <span className="song-artist">
+                {playlist.showDate ? `${formatShowDate(playlist.showDate)} · ` : ''}
                 {playlist.songCount} song{playlist.songCount === 1 ? '' : 's'}
               </span>
             </button>

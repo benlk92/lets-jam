@@ -6,7 +6,7 @@ interface SongQueueProps {
   importedFromPlaylistName: string | null;
   onSelectSong: (song: Song) => void;
   onRemove: (songId: string) => void;
-  onSaveAsNew: (name: string) => void;
+  onSaveAsNew: (name: string, showDate: string | null) => void;
   onUpdatePlaylist: () => void;
   onBack: () => void;
 }
@@ -21,12 +21,14 @@ export default function SongQueue({
   onBack,
 }: SongQueueProps) {
   const [newName, setNewName] = useState('');
+  const [newDate, setNewDate] = useState('');
 
   function handleSaveAsNew() {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    onSaveAsNew(trimmed);
+    onSaveAsNew(trimmed, newDate || null);
     setNewName('');
+    setNewDate('');
   }
 
   return (
@@ -74,6 +76,13 @@ export default function SongQueue({
               placeholder="Playlist name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
+            />
+            <input
+              type="date"
+              className="settings-add-name playlist-date-input"
+              value={newDate}
+              onChange={(e) => setNewDate(e.target.value)}
+              aria-label="Show date (optional)"
             />
             <button type="button" className="btn btn-ghost" onClick={handleSaveAsNew}>
               {importedFromPlaylistName ? 'Save as New' : 'Save'}

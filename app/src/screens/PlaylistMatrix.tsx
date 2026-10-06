@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { PlaylistHistory } from '../types';
+import { formatShowDate } from '../lib/showDate';
 
 interface PlaylistMatrixProps {
   history: PlaylistHistory;
@@ -7,7 +8,19 @@ interface PlaylistMatrixProps {
 }
 
 export default function PlaylistMatrix({ history, onBack }: PlaylistMatrixProps) {
-  const { playlists, songs, appearances } = history;
+  const { songs, appearances } = history;
+  const [newestFirst, setNewestFirst] = useState(true);
+
+  // Undated playlists have nothing to order by, so they always sit below the
+  // dated ones (in the order they came back — newest created first) rather
+  // than flipping to the top when the direction is reversed.
+  const playlists = useMemo(() => {
+    const dated = history.playlists.filter((p) => p.showDate);
+    const undated = history.playlists.filter((p) => !p.showDate);
+    dated.sort((a, b) => (a.showDate as string).localeCompare(b.showDate as string));
+    if (newestFirst) dated.reverse();
+    return [...dated, ...undated];
+  }, [history.playlists, newestFirst]);
 
   const appearanceByCell = useMemo(() => {
     const map = new Map<string, { leader: string | null; position: number }>();
@@ -32,6 +45,10 @@ export default function PlaylistMatrix({ history, onBack }: PlaylistMatrixProps)
         {songs.length} song{songs.length === 1 ? '' : 's'} that have appeared on a playlist. A dot means it was on that
         playlist; the letter is who led it, if one was set.
       </p>
+
+      <button type="button" className="btn btn-ghost btn-small" onClick={() => setNewestFirst((v) => !v)}>
+        Sorted by date: {newestFirst ? 'newest first' : 'oldest first'}
+      </button>
 
       <div className="matrix-scroll pm-scroll">
         <table className="matrix-table">
@@ -58,6 +75,7 @@ export default function PlaylistMatrix({ history, onBack }: PlaylistMatrixProps)
               <tr key={playlist.id}>
                 <th className="matrix-row-header" scope="row">
                   <span className="song-title">{playlist.name}</span>
+                  {playlist.showDate && <span className="song-artist">{formatShowDate(playlist.showDate)}</span>}
                 </th>
                 {songs.map((song) => {
                   const hit = appearanceByCell.get(`${playlist.id}:${song.songId}`);

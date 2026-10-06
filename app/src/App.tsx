@@ -55,6 +55,7 @@ import {
   createPlaylistFromQueue,
   setPlaylistSongs,
   renamePlaylist,
+  setPlaylistShowDate,
   deletePlaylist,
   addSongToPlaylist,
   removeSongFromPlaylist,
@@ -435,9 +436,9 @@ export default function App() {
 
   // Saving links the queue to the new playlist — further edits and a
   // subsequent "Update" target it, matching ordinary "Save As" behavior.
-  async function handleSaveQueueAsNewPlaylist(name: string) {
+  async function handleSaveQueueAsNewPlaylist(name: string, showDate: string | null) {
     await runOrAlertOffline(async () => {
-      const id = await createPlaylistFromQueue(name, queue);
+      const id = await createPlaylistFromQueue(name, queue, showDate);
       setPlaylists(await getPlaylists());
       setImportedFromPlaylistId(id);
     });
@@ -464,6 +465,16 @@ export default function App() {
     await runOrAlertOffline(async () => {
       setPlaylistHistory(await getPlaylistHistory());
       setScreen('playlistMatrix');
+    });
+  }
+
+  async function handleSetPlaylistDate(showDate: string | null) {
+    if (!activePlaylistId) return;
+    await runOrAlertOffline(async () => {
+      await setPlaylistShowDate(activePlaylistId, showDate);
+      const [detail, list] = await Promise.all([getPlaylistDetail(activePlaylistId), getPlaylists()]);
+      setActivePlaylist(detail);
+      setPlaylists(list);
     });
   }
 
@@ -1200,6 +1211,7 @@ export default function App() {
           allSongs={songs}
           leaders={leaders}
           onRename={handleRenamePlaylist}
+          onSetDate={handleSetPlaylistDate}
           onDelete={handleDeletePlaylist}
           onSetLeader={handlePlaylistSetLeader}
           onReorder={handleReorderPlaylistSongs}
