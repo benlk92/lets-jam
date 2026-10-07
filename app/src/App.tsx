@@ -89,6 +89,7 @@ import Playlists from './screens/Playlists';
 import PlaylistDetailScreen from './screens/PlaylistDetail';
 import PlaylistMatrix from './screens/PlaylistMatrix';
 import Matrix from './screens/Matrix';
+import { useResultsScrollMemory } from './lib/useResultsScrollMemory';
 import SongTagEditor from './components/SongTagEditor';
 import './App.css';
 
@@ -650,6 +651,12 @@ export default function App() {
     () => sortSongs(filteredSongs, sortCriteria, ratingScale),
     [filteredSongs, sortCriteria, ratingScale],
   );
+
+  const resultsListKey = useMemo(
+    () => JSON.stringify({ filters, includeUntagged, sortCriteria, randomTenIds, space }),
+    [filters, includeUntagged, sortCriteria, randomTenIds, space],
+  );
+  useResultsScrollMemory(screen, resultsListKey);
 
   const activeSong = songs.find((s) => s.id === activeSongId) ?? null;
   const tagEditorSong = songs.find((s) => s.id === tagEditorSongId) ?? null;
