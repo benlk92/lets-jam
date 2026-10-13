@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Song } from '../types';
-import { transposeChordChart } from '../lib/chordChart';
+import { chartToChordNumbers, detectKey, KEY_NAMES, transposeChordChart } from '../lib/chordChart';
 
 interface ChordChartViewerProps {
   song: Song;
@@ -72,6 +72,8 @@ function RecordingPlayback({
 
 export default function ChordChartViewer({ song, loadAudioUrl, onBack }: ChordChartViewerProps) {
   const [semitones, setSemitones] = useState(0);
+  const [showNumbers, setShowNumbers] = useState(false);
+  const [keyOverride, setKeyOverride] = useState<number | null>(null);
   const [speed, setSpeed] = useState<Speed>('off');
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -84,7 +86,14 @@ export default function ChordChartViewer({ song, loadAudioUrl, onBack }: ChordCh
     return () => clearInterval(id);
   }, [speed]);
 
-  const displayText = transposeChordChart(song.chordChart ?? '', semitones);
+  const chart = song.chordChart ?? '';
+  const detectedKey = useMemo(() => detectKey(chart), [chart]);
+  const tonic = keyOverride ?? detectedKey ?? KEY_NAMES.indexOf('C');
+
+  // Numbers are relative to the key, so transposing has no effect on them —
+  // they're always built from the original chart, and the transpose control
+  // gives way to a key picker while they're showing.
+  const displayText = showNumbers ? chartToChordNumbers(chart, tonic) : transposeChordChart(chart, semitones);
 
   return (
     <div className="screen chord-chart-viewer">
@@ -96,26 +105,58 @@ export default function ChordChartViewer({ song, loadAudioUrl, onBack }: ChordCh
           <span className="chord-chart-title">{song.title}</span>
           <span className="chord-chart-artist">{song.artist}</span>
         </div>
-        <div className="chord-chart-transpose">
+        {showNumbers ? (
+          <label className="chord-chart-key">
+            Key
+            <select value={tonic} onChange={(e) => setKeyOverride(Number(e.target.value))}>
+              {KEY_NAMES.map((name, index) => (
+                <option key={name} value={index}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <div className="chord-chart-transpose">
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => setSemitones((s) => s - 1)}
+              aria-label="Transpose down a half step"
+            >
+              −
+            </button>
+            <span className="chord-chart-transpose-value">{semitones > 0 ? `+${semitones}` : semitones}</span>
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => setSemitones((s) => s + 1)}
+              aria-label="Transpose up a half step"
+            >
+              +
+            </button>
+          </div>
+        )}
+      </div>
+
+      {song.chordChart && (
+        <div className="chord-chart-speed">
           <button
             type="button"
-            className="icon-button"
-            onClick={() => setSemitones((s) => s - 1)}
-            aria-label="Transpose down a half step"
+            className={`chord-chart-speed-btn ${!showNumbers ? 'chord-chart-speed-btn-active' : ''}`}
+            onClick={() => setShowNumbers(false)}
           >
-            −
+            Chord names
           </button>
-          <span className="chord-chart-transpose-value">{semitones > 0 ? `+${semitones}` : semitones}</span>
           <button
             type="button"
-            className="icon-button"
-            onClick={() => setSemitones((s) => s + 1)}
-            aria-label="Transpose up a half step"
+            className={`chord-chart-speed-btn ${showNumbers ? 'chord-chart-speed-btn-active' : ''}`}
+            onClick={() => setShowNumbers(true)}
           >
-            +
+            Numbers
           </button>
         </div>
-      </div>
+      )}
 
       <div className="chord-chart-speed">
         {(['off', 'slow', 'medium', 'fast'] as const).map((s) => (
