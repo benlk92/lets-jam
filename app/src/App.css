@@ -1069,7 +1069,17 @@
 /* Chord Chart Viewer */
 
 .screen.chord-chart-viewer {
-  max-height: 100svh;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  background: var(--bg);
   overflow: hidden;
   gap: 10px;
 }
@@ -1151,9 +1161,12 @@
 }
 
 .chord-chart-body {
+  position: relative;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px;
@@ -1165,8 +1178,17 @@
   font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
   font-size: 15px;
   line-height: 1.5;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   color: var(--text);
+}
+
+.chord-chart-probe {
+  position: absolute;
+  visibility: hidden;
+  white-space: pre;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 15px;
 }
 
 /* Settings */

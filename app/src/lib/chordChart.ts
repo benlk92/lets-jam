@@ -143,11 +143,8 @@ function rewriteChordLine(line: string, tonic: number): string {
   });
 }
 
-export function chartToChordNumbers(text: string, tonic: number): string {
-  return text
-    .split('\n')
-    .map((line) => (isChordLine(line) ? rewriteChordLine(line, tonic) : line))
-    .join('\n');
+export function chordLineToNumbers(line: string, tonic: number): string {
+  return rewriteChordLine(line, tonic);
 }
 
 // A best guess at the major key a chart is in (as an index into KEY_NAMES):
@@ -194,4 +191,77 @@ export function detectKey(text: string): number | null {
     }
   }
   return best;
+}
+
+// --- Wrapping ---------------------------------------------------------------
+// Fits a chart to a fixed number of columns for a screen that must never
+// scroll sideways. A chord line and the lyric line under it are cut at the
+// same column and re-emitted as stacked pairs, so every chord stays over the
+// syllable it belongs to. Breaks prefer a space in the lyric where no chord
+// is mid-name; a chord is only ever split if there is nowhere else to cut.
+// `mapChordLine` (e.g. names -> numbers) runs on each finished chord line.
+
+function leadingSpaces(line: string): number {
+  return line.length - line.trimStart().length;
+}
+
+function findBreak(chord: string, lyric: string, start: number, maxCols: number): number {
+  const limit = start + maxCols;
+  for (let p = limit; p > start; p--) {
+    const lyricOk = p >= lyric.length || lyric[p] === ' ';
+    const chordOk = p >= chord.length || chord[p] === ' ';
+    if (lyricOk && chordOk) return p;
+  }
+  let p = limit;
+  while (p > start + 1 && chord[p] !== undefined && chord[p] !== ' ' && chord[p - 1] !== ' ') p--;
+  return p > start + 1 ? p : limit;
+}
+
+function wrapPair(chord: string, lyric: string, maxCols: number, mapChordLine: (line: string) => string): string[] {
+  const width = Math.max(chord.length, lyric.length);
+  const emit = (c: string, l: string): string[] => {
+    const out: string[] = [];
+    if (c.trim()) out.push(mapChordLine(c.trimEnd()));
+    if (l.trim() || !c.trim()) out.push(l.trimEnd());
+    return out;
+  };
+  if (width <= maxCols) return emit(chord, lyric);
+
+  const out: string[] = [];
+  let start = 0;
+  while (start < width) {
+    const end = width - start <= maxCols ? width : findBreak(chord, lyric, start, maxCols);
+    let c = chord.slice(start, end);
+    let l = lyric.slice(start, end);
+    const strip = Math.min(c.trim() ? leadingSpaces(c) : Infinity, l.trim() ? leadingSpaces(l) : Infinity);
+    if (strip !== Infinity) {
+      c = c.slice(strip);
+      l = l.slice(strip);
+    }
+    if (c.trim() || l.trim()) out.push(...emit(c, l));
+    start = end;
+  }
+  return out;
+}
+
+export function wrapChordChart(
+  text: string,
+  maxCols: number,
+  mapChordLine: (line: string) => string = (line) => line,
+): string {
+  if (maxCols < 8) return text;
+  const lines = text.split('\n');
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (isChordLine(line)) {
+      const next = lines[i + 1];
+      const pairs = next !== undefined && next.trim() !== '' && !isChordLine(next) && !/^\s*\[.*\]\s*$/.test(next);
+      out.push(...wrapPair(line, pairs ? next : '', maxCols, mapChordLine));
+      if (pairs) i++;
+    } else {
+      out.push(...wrapPair('', line, maxCols, mapChordLine));
+    }
+  }
+  return out.join('\n');
 }

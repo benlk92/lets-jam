@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Song } from '../types';
-import { chartToChordNumbers, detectKey, KEY_NAMES, transposeChordChart } from '../lib/chordChart';
+import { chordLineToNumbers, detectKey, KEY_NAMES, transposeChordChart, wrapChordChart } from '../lib/chordChart';
 
 interface ChordChartViewerProps {
   song: Song;
@@ -12,12 +12,10 @@ type Speed = 'off' | 'slow' | 'medium' | 'fast';
 
 // Pixels per second — tuned for reading pace, not proportional to anything.
 const SPEED_PX_PER_SEC: Record<Exclude<Speed, 'off'>, number> = {
-  slow: 15,
-  medium: 35,
-  fast: 65,
+  slow: 9,
+  medium: 18,
+  fast: 35,
 };
-
-const TICK_MS = 50;
 
 // Playback only — adding/renaming/removing recordings stays in the tag
 // editor. Fetched on demand, same as the tag editor's list, rather than the
@@ -75,16 +73,85 @@ export default function ChordChartViewer({ song, loadAudioUrl, onBack }: ChordCh
   const [showNumbers, setShowNumbers] = useState(false);
   const [keyOverride, setKeyOverride] = useState<number | null>(null);
   const [speed, setSpeed] = useState<Speed>('off');
+  const [cols, setCols] = useState(0);
+  const screenRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const probeRef = useRef<HTMLSpanElement>(null);
 
+  // Position is tracked as a decimal and driven by real elapsed time:
+  // browsers round a scroll offset to whole (device) pixels, so nudging by a
+  // fraction each tick — which is all a slow speed amounts to — moved
+  // nothing at all on a phone.
   useEffect(() => {
     if (speed === 'off') return;
-    const pxPerTick = (SPEED_PX_PER_SEC[speed] * TICK_MS) / 1000;
-    const id = setInterval(() => {
-      bodyRef.current?.scrollBy(0, pxPerTick);
-    }, TICK_MS);
-    return () => clearInterval(id);
+    const el = bodyRef.current;
+    if (!el) return;
+    const pxPerSec = SPEED_PX_PER_SEC[speed];
+    let position = el.scrollTop;
+    let last = performance.now();
+    let frame = 0;
+    function step(now: number) {
+      const elapsed = Math.min(now - last, 100);
+      last = now;
+      // A finger drag moves scrollTop underneath us — carry on from there.
+      if (Math.abs(el!.scrollTop - position) > 1.5) position = el!.scrollTop;
+      position += (pxPerSec * elapsed) / 1000;
+      el!.scrollTop = position;
+      frame = requestAnimationFrame(step);
+    }
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
   }, [speed]);
+
+  // The page itself must never move while playing: lock the document, and
+  // route any drag that starts outside the lyrics (toolbar, gaps) into them.
+  useEffect(() => {
+    const html = document.documentElement;
+    const previous = { html: html.style.overflow, body: document.body.style.overflow };
+    html.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
+    const screen = screenRef.current;
+    const body = bodyRef.current;
+    let lastY = 0;
+    function handleTouchStart(e: TouchEvent) {
+      lastY = e.touches[0].clientY;
+    }
+    function handleTouchMove(e: TouchEvent) {
+      if (!body || body.contains(e.target as Node)) return;
+      e.preventDefault();
+      const y = e.touches[0].clientY;
+      body.scrollTop += lastY - y;
+      lastY = y;
+    }
+    screen?.addEventListener('touchstart', handleTouchStart, { passive: true });
+    screen?.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      html.style.overflow = previous.html;
+      document.body.style.overflow = previous.body;
+      screen?.removeEventListener('touchstart', handleTouchStart);
+      screen?.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
+
+  // How many monospace characters fit across the lyrics, so the chart can be
+  // wrapped to the screen instead of scrolled sideways.
+  const hasChart = Boolean(song.chordChart);
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    const probe = probeRef.current;
+    if (!body || !probe) return;
+    function measure() {
+      const charWidth = probe!.getBoundingClientRect().width / 20;
+      const style = getComputedStyle(body!);
+      const inner = body!.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      if (charWidth > 0) setCols(Math.floor(inner / charWidth) - 1);
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [hasChart]);
 
   const chart = song.chordChart ?? '';
   const detectedKey = useMemo(() => detectKey(chart), [chart]);
@@ -93,10 +160,16 @@ export default function ChordChartViewer({ song, loadAudioUrl, onBack }: ChordCh
   // Numbers are relative to the key, so transposing has no effect on them —
   // they're always built from the original chart, and the transpose control
   // gives way to a key picker while they're showing.
-  const displayText = showNumbers ? chartToChordNumbers(chart, tonic) : transposeChordChart(chart, semitones);
+  const displayText = useMemo(
+    () =>
+      showNumbers
+        ? wrapChordChart(chart, cols, (line) => chordLineToNumbers(line, tonic))
+        : wrapChordChart(transposeChordChart(chart, semitones), cols),
+    [chart, cols, showNumbers, tonic, semitones],
+  );
 
   return (
-    <div className="screen chord-chart-viewer">
+    <div className="screen chord-chart-viewer" ref={screenRef}>
       <div className="chord-chart-toolbar">
         <button type="button" className="btn btn-ghost btn-small" onClick={onBack}>
           ← Back
@@ -186,7 +259,12 @@ export default function ChordChartViewer({ song, loadAudioUrl, onBack }: ChordCh
 
       <div className="chord-chart-body" ref={bodyRef}>
         {song.chordChart ? (
-          <pre className="chord-chart-text">{displayText}</pre>
+          <>
+            <span className="chord-chart-probe" ref={probeRef} aria-hidden="true">
+              MMMMMMMMMMMMMMMMMMMM
+            </span>
+            <pre className="chord-chart-text">{displayText}</pre>
+          </>
         ) : (
           <p className="chip-group-empty">No lyrics saved for this song yet.</p>
         )}
