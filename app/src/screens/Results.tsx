@@ -45,6 +45,8 @@ interface ResultsProps {
   onAddSongToPlaylist: (playlistId: string, song: Song) => void;
   canEdit: boolean;
   isRandomTen: boolean;
+  search: string;
+  onSearchChange: (value: string) => void;
 }
 
 function filterLabel(category: Category, filter: CategoryFilter): string {
@@ -79,6 +81,8 @@ export default function Results({
   onAddSongToPlaylist,
   canEdit,
   isRandomTen,
+  search,
+  onSearchChange,
 }: ResultsProps) {
   const [showMenu, setShowMenu] = useState(false);
   const hamburgerRef = useClickOutside(showMenu, setShowMenu);
@@ -93,6 +97,21 @@ export default function Results({
   ];
 
   const queuedIds = useMemo(() => new Set(queue.map((e) => e.songId)), [queue]);
+
+  // Tapping a song goes straight to the most useful thing for it: its saved
+  // lyrics/recordings, else its Ultimate Guitar page (or a search for it in
+  // Pop Songs), else — with nothing to show — the rating screen.
+  function openSong(song: Song) {
+    if (song.chordChart || song.recordings.length > 0) {
+      onOpenChordChart(song);
+    } else if (song.ultimateGuitarUrl) {
+      window.open(song.ultimateGuitarUrl, '_blank', 'noopener');
+    } else if (isPopSongs) {
+      window.open(buildUltimateGuitarSearchUrl(song.title), '_blank', 'noopener');
+    } else if (canEdit) {
+      onOpenAssessment(song);
+    }
+  }
 
   return (
     <div className="screen results">
@@ -168,6 +187,17 @@ export default function Results({
           <button type="button" className="btn btn-ghost btn-small" onClick={onOpenSort}>
             Sort
           </button>
+          <input
+            type="text"
+            className="results-search"
+            placeholder="Search"
+            aria-label="Search songs by title or artist"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
         </div>
       </div>
 
@@ -207,45 +237,17 @@ export default function Results({
           const isQueued = canEdit && queuedIds.has(song.id);
           return (
             <li key={song.id} className={`song-row ${isQueued ? 'song-row-queued' : ''}`}>
-              <div className="song-row-info">
+              <button type="button" className="song-row-main song-row-open" onClick={() => openSong(song)}>
                 <span className="song-title">{song.title}</span>
                 <span className="song-artist">{song.artist}</span>
                 {isQueued && <span className="queued-badge">Queued</span>}
-              </div>
+              </button>
               {staleness && (
                 <span className={`staleness-badge ${staleness.overdue ? 'staleness-overdue' : 'staleness-fresh'}`}>
                   {staleness.text}
                 </span>
               )}
               <div className="song-row-actions">
-                {song.chordChart || song.recordings.length > 0 ? (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-small song-row-view-lyrics"
-                    onClick={() => onOpenChordChart(song)}
-                    aria-label={`View lyrics for ${song.title}`}
-                  >
-                    View Lyrics
-                  </button>
-                ) : song.ultimateGuitarUrl || isPopSongs ? (
-                  <a
-                    className="icon-button song-row-ug"
-                    href={song.ultimateGuitarUrl || buildUltimateGuitarSearchUrl(song.title)}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={
-                      song.ultimateGuitarUrl
-                        ? isPopSongs
-                          ? `Open Ultimate Guitar tab for ${song.title}`
-                          : `Open link for ${song.title}`
-                        : `Search Ultimate Guitar for ${song.title}`
-                    }
-                  >
-                    🎼
-                  </a>
-                ) : (
-                  <span className="icon-button song-row-ug song-row-ug-empty" aria-hidden="true" />
-                )}
                 {canEdit && (
                   <button
                     type="button"

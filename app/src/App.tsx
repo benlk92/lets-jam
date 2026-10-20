@@ -261,6 +261,7 @@ export default function App() {
 
   const [filters, setFilters] = useState<FilterState>({});
   const [includeUntagged, setIncludeUntagged] = useState(false);
+  const [search, setSearch] = useState('');
   const [showStaleness, setShowStaleness] = useState(false);
   const [sortCriteria, setSortCriteria] = useState<SortCriterion[]>(DEFAULT_SORT_CRITERIA);
   const [pickerStep, setPickerStep] = useState(0);
@@ -591,6 +592,7 @@ export default function App() {
     setSpaceState(next);
     saveSpace(next);
     setFilters({});
+    setSearch('');
     setSortCriteria(DEFAULT_SORT_CRITERIA);
     setRandomTenIds(null);
     setQueue([]);
@@ -652,9 +654,20 @@ export default function App() {
     [filteredSongs, sortCriteria, ratingScale],
   );
 
+  // The search box narrows what Results (and the Matrix, which shows
+  // "whatever Results shows") display, but not the Filters panel's own match
+  // count — that describes the filters alone.
+  const visibleSongs = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return sortedSongs;
+    return sortedSongs.filter(
+      (s) => s.title.toLowerCase().includes(query) || s.artist.toLowerCase().includes(query),
+    );
+  }, [sortedSongs, search]);
+
   const resultsListKey = useMemo(
-    () => JSON.stringify({ filters, includeUntagged, sortCriteria, randomTenIds, space }),
-    [filters, includeUntagged, sortCriteria, randomTenIds, space],
+    () => JSON.stringify({ filters, includeUntagged, sortCriteria, randomTenIds, space, search }),
+    [filters, includeUntagged, sortCriteria, randomTenIds, space, search],
   );
   useResultsScrollMemory(screen, resultsListKey);
 
@@ -1117,7 +1130,7 @@ export default function App() {
       {screen === 'results' && (
         <Results
           space={space}
-          songs={sortedSongs}
+          songs={visibleSongs}
           totalCount={songs.length}
           ratingScale={ratingScale}
           categories={categories}
@@ -1140,6 +1153,8 @@ export default function App() {
           onAddSongToPlaylist={handleAddSongToPlaylistFromResults}
           canEdit={canEdit}
           isRandomTen={randomTenIds !== null}
+          search={search}
+          onSearchChange={setSearch}
         />
       )}
 
@@ -1231,7 +1246,7 @@ export default function App() {
 
       {screen === 'matrix' && (
         <Matrix
-          songs={sortedSongs}
+          songs={visibleSongs}
           categories={categories}
           ratingScale={ratingScale}
           onSetTag={handleMatrixSetTag}
