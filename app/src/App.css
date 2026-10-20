@@ -119,32 +119,6 @@
   background: var(--chip-bg);
 }
 
-/* Splash */
-
-.splash {
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 24px;
-}
-
-.splash-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  max-width: 320px;
-}
-
-.splash h1 {
-  font-size: 34px;
-}
-
-.splash-tagline {
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-
 /* Passphrase Gate */
 
 .passphrase-gate {

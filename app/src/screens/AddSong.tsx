@@ -17,13 +17,14 @@ interface AddSongProps {
     tags: Record<string, TagValue>;
   }) => void;
   onCancel: () => void;
+  backLabel: string;
 }
 
 function normalize(s: string): string {
   return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-export default function AddSong({ space, categories, songs, onSave, onCancel }: AddSongProps) {
+export default function AddSong({ space, categories, songs, onSave, onCancel, backLabel }: AddSongProps) {
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [url, setUrl] = useState('');
@@ -76,7 +77,7 @@ export default function AddSong({ space, categories, songs, onSave, onCancel }: 
   return (
     <div className="screen add-song">
       <button type="button" className="btn btn-ghost" onClick={onCancel}>
-        ← Back to settings
+        ← {backLabel}
       </button>
 
       <h2>Add Song</h2>

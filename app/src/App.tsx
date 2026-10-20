@@ -71,7 +71,6 @@ import { isNetworkError } from './data/offlineCache';
 import { initSupabaseClient } from './data/supabaseClient';
 import { filterSongs, GENRE_CATEGORY_ID, shuffledSample, sortSongs } from './lib/filtering';
 import { buildGapFillQueue, gapFillAt, gapFillTotal, type GapFillMode, type GapFillQueue } from './lib/gapfill';
-import Splash from './screens/Splash';
 import PassphraseGate from './screens/PassphraseGate';
 import GuidedPicker from './screens/GuidedPicker';
 import ScatterPicker from './screens/ScatterPicker';
@@ -97,7 +96,6 @@ import './App.css';
 type Screen =
   | 'loading'
   | 'passphrase'
-  | 'splash'
   | 'picker'
   | 'scatter'
   | 'pickerChooser'
@@ -128,32 +126,12 @@ const DEFAULT_SORT_CRITERIA: SortCriterion[] = [
   { key: 'artist', direction: 'asc' },
 ];
 
-const IDLE_MS = 60 * 60 * 1000;
-const LAST_ACTIVE_KEY = 'songapp:lastActiveAt';
-
 // RLS enforces this server-side (see the migration) — this is just the
 // client-side "don't ask again for a while" convenience the brief calls for.
 const PASSPHRASE_KEY = 'songapp:passphrase';
 const PASSPHRASE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 type Role = 'admin' | 'viewer';
-
-function shouldResume(): boolean {
-  try {
-    const lastActive = localStorage.getItem(LAST_ACTIVE_KEY);
-    return !!lastActive && Date.now() - Number(lastActive) < IDLE_MS;
-  } catch {
-    return false;
-  }
-}
-
-function markActive() {
-  try {
-    localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
-  } catch {
-    // localStorage unavailable — resume-detection just degrades to "always splash"
-  }
-}
 
 function loadStoredPassphrase(): { value: string; role: Role } | null {
   try {
@@ -268,6 +246,7 @@ export default function App() {
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [scrollSpeeds, setScrollSpeedsState] = useState(loadScrollSpeeds);
+  const [addSongOrigin, setAddSongOrigin] = useState<'settings' | 'results'>('settings');
   const [initialQueueState] = useState(loadQueueState);
   const [queue, setQueue] = useState<QueueEntry[]>(initialQueueState.entries);
   const [importedFromPlaylistId, setImportedFromPlaylistId] = useState<string | null>(
@@ -291,10 +270,6 @@ export default function App() {
   const [offlineUnavailable, setOfflineUnavailable] = useState(false);
   const [pendingCount, setPendingCount] = useState(pendingWriteCount);
 
-  // Captured once at first render, before any effect can mark the session
-  // active — otherwise StrictMode's double-invoked mount effect would see
-  // the timestamp its own first run just wrote and always "resume".
-  const [initialResume] = useState(shouldResume);
   const [initialPassphrase] = useState(loadStoredPassphrase);
   const [role, setRole] = useState<Role>(initialPassphrase?.role ?? 'admin');
   const canEdit = role === 'admin';
@@ -318,8 +293,7 @@ export default function App() {
       setLeaders(l);
       setIsOffline(false);
       setOfflineUnavailable(false);
-      setScreen(initialResume ? 'results' : 'splash');
-      markActive();
+      setScreen('results');
       if (pendingWriteCount() > 0) {
         const { remaining } = await syncPendingWrites();
         setPendingCount(remaining);
@@ -336,8 +310,7 @@ export default function App() {
       setCategories(cached.categories);
       setRatingScale(cached.ratingScale);
       setIsOffline(true);
-      setScreen(initialResume ? 'results' : 'splash');
-      markActive();
+      setScreen('results');
     }
   }
 
@@ -377,11 +350,6 @@ export default function App() {
     await loadAppData();
     return null;
   }
-
-  useEffect(() => {
-    const interval = setInterval(markActive, 30_000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Once back online, flush any ratings/memorized-toggles made while
   // offline, then reconcile with the server (another device may have
@@ -629,7 +597,6 @@ export default function App() {
   }
 
   function goScreen(next: Screen) {
-    markActive();
     setScreen(next);
   }
 
@@ -713,13 +680,6 @@ export default function App() {
     setFilters({});
     setShowStaleness(false);
     setRandomTenIds(shuffledSample(pool, 10).map((s) => s.id));
-    goScreen('results');
-  }
-
-  function showAllSongs() {
-    setFilters({});
-    setShowStaleness(false);
-    setRandomTenIds(null);
     goScreen('results');
   }
 
@@ -1045,7 +1005,7 @@ export default function App() {
   }) {
     await runOrAlertOffline(async () => {
       setSongs(await addSong(input));
-      goScreen('settings');
+      goScreen(addSongOrigin);
     });
   }
 
@@ -1071,7 +1031,6 @@ export default function App() {
 
       {screen === 'passphrase' && <PassphraseGate onSubmit={handlePassphraseSubmit} />}
 
-      {screen === 'splash' && <Splash onFindSong={startGuidedPicker} onShowAll={showAllSongs} />}
 
       {screen === 'picker' && (
         <GuidedPicker
@@ -1127,6 +1086,10 @@ export default function App() {
           onOpenQueue={() => goScreen('queue')}
           onOpenPlaylists={() => goScreen('playlists')}
           onOpenMatrix={() => goScreen('matrix')}
+          onOpenAddSong={() => {
+            setAddSongOrigin('results');
+            goScreen('addsong');
+          }}
           onOpenPickerChooser={() => goScreen('pickerChooser')}
           onToggleQueue={handleToggleQueue}
           onOpenAssessment={(song) => handleSelectSong(song, 'results')}
@@ -1162,7 +1125,10 @@ export default function App() {
           onUpdateRating={handleUpdateRating}
           onRemoveRating={handleRemoveRating}
           onSelectSong={handleSelectSong}
-          onOpenAddSong={() => goScreen('addsong')}
+          onOpenAddSong={() => {
+            setAddSongOrigin('settings');
+            goScreen('addsong');
+          }}
           scrollSpeeds={scrollSpeeds}
           onChangeScrollSpeeds={handleChangeScrollSpeeds}
           space={space}
@@ -1181,7 +1147,8 @@ export default function App() {
           categories={categories}
           songs={songs}
           onSave={handleAddSong}
-          onCancel={() => goScreen('settings')}
+          onCancel={() => goScreen(addSongOrigin)}
+          backLabel={addSongOrigin === 'results' ? 'Back to results' : 'Back to settings'}
         />
       )}
 

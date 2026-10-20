@@ -36,6 +36,7 @@ interface ResultsProps {
   onOpenQueue: () => void;
   onOpenPlaylists: () => void;
   onOpenMatrix: () => void;
+  onOpenAddSong: () => void;
   onOpenPickerChooser: () => void;
   onToggleQueue: (song: Song) => void;
   onOpenAssessment: (song: Song) => void;
@@ -72,6 +73,7 @@ export default function Results({
   onOpenQueue,
   onOpenPlaylists,
   onOpenMatrix,
+  onOpenAddSong,
   onOpenPickerChooser,
   onToggleQueue,
   onOpenAssessment,
@@ -187,6 +189,11 @@ export default function Results({
           <button type="button" className="btn btn-ghost btn-small" onClick={onOpenSort}>
             Sort
           </button>
+          {canEdit && (
+            <button type="button" className="btn btn-ghost btn-small" onClick={onOpenAddSong}>
+              Add
+            </button>
+          )}
           <input
             type="text"
             className="results-search"
