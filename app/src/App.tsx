@@ -177,23 +177,10 @@ function storePassphrase(value: string, role: Role) {
   }
 }
 
-// Device-local UI preference, not song data — no need to sync it across
-// devices the way the brief requires for the actual library.
-const OPEN_UG_ON_TAP_KEY = 'songapp:openUgOnTap';
-
-function loadOpenUgOnTap(): boolean {
-  try {
-    const raw = localStorage.getItem(OPEN_UG_ON_TAP_KEY);
-    return raw == null ? true : raw === 'true';
-  } catch {
-    return true;
-  }
-}
-
 // The performance queue — songs (each carrying a leader, if it came from an
 // imported playlist), in the order they were added. Purely a device-local
 // session aid (not song data, and admin-only), so it lives in localStorage
-// rather than the database like openUgOnTap above. v2: entries carry a
+// rather than the database. v2: entries carry a
 // leader alongside the song id, and the queue remembers which playlist (if
 // any) it was imported from, so "Save" can offer to update that playlist
 // in place instead of only ever creating a new one.
@@ -280,7 +267,6 @@ export default function App() {
   const [tagEditorSongId, setTagEditorSongId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
-  const [openUgOnTap, setOpenUgOnTapState] = useState(loadOpenUgOnTap);
   const [scrollSpeeds, setScrollSpeedsState] = useState(loadScrollSpeeds);
   const [initialQueueState] = useState(loadQueueState);
   const [queue, setQueue] = useState<QueueEntry[]>(initialQueueState.entries);
@@ -777,7 +763,6 @@ export default function App() {
   // the Song Queue list, or Settings' "Find a Song" search. Only reachable
   // in admin contexts (those entry points are all canEdit-gated in the UI).
   function handleSelectSong(song: Song, origin: AssessmentOrigin = 'results') {
-    if (openUgOnTap) window.open(song.ultimateGuitarUrl, '_blank', 'noopener');
     setActiveSongId(song.id);
     setActiveSongOrigin(origin);
     goScreen('assessment');
@@ -792,15 +777,6 @@ export default function App() {
   function handleChangeScrollSpeeds(next: ScrollSpeeds) {
     setScrollSpeedsState(next);
     saveScrollSpeeds(next);
-  }
-
-  function handleToggleOpenUgOnTap(value: boolean) {
-    setOpenUgOnTapState(value);
-    try {
-      localStorage.setItem(OPEN_UG_ON_TAP_KEY, String(value));
-    } catch {
-      // localStorage unavailable — preference just won't survive a reload
-    }
   }
 
   async function handleRate(label: string) {
@@ -1187,10 +1163,8 @@ export default function App() {
           onRemoveRating={handleRemoveRating}
           onSelectSong={handleSelectSong}
           onOpenAddSong={() => goScreen('addsong')}
-          openUgOnTap={openUgOnTap}
           scrollSpeeds={scrollSpeeds}
           onChangeScrollSpeeds={handleChangeScrollSpeeds}
-          onToggleOpenUgOnTap={handleToggleOpenUgOnTap}
           space={space}
           onSwitchSpace={handleSwitchSpace}
           leaders={leaders}

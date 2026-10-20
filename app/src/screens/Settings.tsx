@@ -28,8 +28,6 @@ interface SettingsProps {
   onRemoveRating: (label: string) => void;
   onSelectSong: (song: Song) => void;
   onOpenAddSong: () => void;
-  openUgOnTap: boolean;
-  onToggleOpenUgOnTap: (value: boolean) => void;
   scrollSpeeds: ScrollSpeeds;
   onChangeScrollSpeeds: (speeds: ScrollSpeeds) => void;
   leaders: string[];
@@ -90,8 +88,6 @@ export default function Settings({
   onRemoveRating,
   onSelectSong,
   onOpenAddSong,
-  openUgOnTap,
-  onToggleOpenUgOnTap,
   scrollSpeeds,
   onChangeScrollSpeeds,
   leaders,
@@ -210,23 +206,6 @@ export default function Settings({
             </button>
           ))}
         </div>
-      </section>
-
-      <section className="settings-section">
-        <h2>Song List Behavior</h2>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={openUgOnTap}
-            onChange={(e) => onToggleOpenUgOnTap(e.target.checked)}
-          />
-          Open the Ultimate Guitar link when opening a song's rating screen
-        </label>
-        <p className="modal-subtitle">
-          {openUgOnTap
-            ? "Opening a song's rating screen also opens its chords/lyrics."
-            : "Opening a song's rating screen only opens the rating screen — the link stays available there."}
-        </p>
       </section>
 
       <section className="settings-section">
