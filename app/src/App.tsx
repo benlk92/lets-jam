@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import type {
   Category,
   CategoryFilter,
@@ -625,6 +625,12 @@ export default function App() {
     [filters, includeUntagged, sortCriteria, randomTenIds, space, search],
   );
   useResultsScrollMemory(screen, resultsListKey);
+
+  // A search is for finding one song; coming back to Results starts from the
+  // full list again. A layout effect so the cleared list is what first paints.
+  useLayoutEffect(() => {
+    if (screen === 'results') setSearch('');
+  }, [screen]);
 
   const activeSong = songs.find((s) => s.id === activeSongId) ?? null;
   const tagEditorSong = songs.find((s) => s.id === tagEditorSongId) ?? null;
