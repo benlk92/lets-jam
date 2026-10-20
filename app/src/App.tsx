@@ -719,9 +719,9 @@ export default function App() {
     );
   }
 
-  // Jumping straight to a song's rating screen — from the Results row menu,
-  // the Song Queue list, or Settings' "Find a Song" search. Only reachable
-  // in admin contexts (those entry points are all canEdit-gated in the UI).
+  // Jumping straight to a song's rating screen — from the Results row menu
+  // or the Song Queue list. Only reachable in admin contexts (those entry
+  // points are all canEdit-gated in the UI).
   function handleSelectSong(song: Song, origin: AssessmentOrigin = 'results') {
     setActiveSongId(song.id);
     setActiveSongOrigin(origin);
@@ -1124,7 +1124,6 @@ export default function App() {
           onAddRating={handleAddRating}
           onUpdateRating={handleUpdateRating}
           onRemoveRating={handleRemoveRating}
-          onSelectSong={handleSelectSong}
           onOpenAddSong={() => {
             setAddSongOrigin('settings');
             goScreen('addsong');

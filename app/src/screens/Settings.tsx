@@ -26,7 +26,6 @@ interface SettingsProps {
   onAddRating: (label: string, intervalDays: number) => void;
   onUpdateRating: (oldLabel: string, next: RatingScaleEntry) => void;
   onRemoveRating: (label: string) => void;
-  onSelectSong: (song: Song) => void;
   onOpenAddSong: () => void;
   scrollSpeeds: ScrollSpeeds;
   onChangeScrollSpeeds: (speeds: ScrollSpeeds) => void;
@@ -37,7 +36,6 @@ interface SettingsProps {
   onReorderLeaders: (orderedNames: string[]) => void;
 }
 
-const SONG_SEARCH_LIMIT = 20;
 const SPEED_NAMES = ['slow', 'medium', 'fast'] as const;
 
 // Keeps what's being typed locally so the field can be cleared and retyped;
@@ -86,7 +84,6 @@ export default function Settings({
   onAddRating,
   onUpdateRating,
   onRemoveRating,
-  onSelectSong,
   onOpenAddSong,
   scrollSpeeds,
   onChangeScrollSpeeds,
@@ -101,18 +98,10 @@ export default function Settings({
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newRatingLabel, setNewRatingLabel] = useState('');
   const [newRatingInterval, setNewRatingInterval] = useState('');
-  const [songQuery, setSongQuery] = useState('');
   const [editingLeader, setEditingLeader] = useState<string | null>(null);
   const [newLeaderName, setNewLeaderName] = useState('');
 
   const valuesModalCategory = categories.find((c) => c.id === valuesModalCategoryId) ?? null;
-
-  const trimmedSongQuery = songQuery.trim().toLowerCase();
-  const songMatches = trimmedSongQuery
-    ? songs.filter(
-        (s) => s.title.toLowerCase().includes(trimmedSongQuery) || s.artist.toLowerCase().includes(trimmedSongQuery),
-      )
-    : [];
 
   function moveCategory(index: number, delta: number) {
     const target = index + delta;
@@ -230,39 +219,6 @@ export default function Settings({
         >
           Reset to defaults
         </button>
-      </section>
-
-      <section className="settings-section">
-        <h2>Find a Song</h2>
-        <p className="modal-subtitle">Jump straight to a song's assessment by title or artist.</p>
-        <input
-          className="settings-song-search"
-          type="search"
-          placeholder="Search title or artist…"
-          value={songQuery}
-          onChange={(e) => setSongQuery(e.target.value)}
-        />
-        {trimmedSongQuery && (
-          <div className="settings-song-results">
-            {songMatches.length === 0 && <p className="chip-group-empty">No songs match "{songQuery.trim()}".</p>}
-            {songMatches.slice(0, SONG_SEARCH_LIMIT).map((song) => (
-              <button
-                key={song.id}
-                type="button"
-                className="settings-song-result"
-                onClick={() => onSelectSong(song)}
-              >
-                <span className="song-title">{song.title}</span>
-                <span className="song-artist">{song.artist}</span>
-              </button>
-            ))}
-            {songMatches.length > SONG_SEARCH_LIMIT && (
-              <p className="settings-song-more">
-                +{songMatches.length - SONG_SEARCH_LIMIT} more — narrow your search to see them
-              </p>
-            )}
-          </div>
-        )}
       </section>
 
       <section className="settings-section">

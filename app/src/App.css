@@ -1198,45 +1198,6 @@
   flex: 1;
 }
 
-.settings-song-search {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 15px;
-}
-
-.settings-song-results {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 320px;
-  overflow-y: auto;
-}
-
-.settings-song-result {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
-  padding: 10px 4px;
-  cursor: pointer;
-  text-align: left;
-  min-height: 44px;
-  justify-content: center;
-}
-
-.settings-song-more {
-  color: var(--text-muted);
-  font-size: 13px;
-  padding: 8px 4px 0;
-}
-
 .settings-category-list {
   display: flex;
   flex-direction: column;
