@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Category, CategoryFilter, FilterState, PlaylistSummary, QueueEntry, RatingScaleEntry, Song, Space } from '../types';
+import { SPACE_LABELS } from '../types';
 import { formatStaleness, stalenessDays } from '../lib/staleness';
 import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
@@ -37,6 +38,7 @@ interface ResultsProps {
   onOpenPlaylists: () => void;
   onOpenMatrix: () => void;
   onOpenAddSong: () => void;
+  onSwitchSpace: (space: Space) => void;
   onOpenPickerChooser: () => void;
   onToggleQueue: (song: Song) => void;
   onOpenAssessment: (song: Song) => void;
@@ -74,6 +76,7 @@ export default function Results({
   onOpenPlaylists,
   onOpenMatrix,
   onOpenAddSong,
+  onSwitchSpace,
   onOpenPickerChooser,
   onToggleQueue,
   onOpenAssessment,
@@ -89,6 +92,7 @@ export default function Results({
   const [showMenu, setShowMenu] = useState(false);
   const hamburgerRef = useClickOutside(showMenu, setShowMenu);
   const isPopSongs = space === 'pop_songs';
+  const otherSpace: Space = isPopSongs ? 'circle_songs' : 'pop_songs';
 
   const [playlistPickerSongId, setPlaylistPickerSongId] = useState<string | null>(null);
   const playlistPickerRef = useClickOutside(playlistPickerSongId !== null, () => setPlaylistPickerSongId(null));
@@ -136,6 +140,16 @@ export default function Results({
               </button>
               {showMenu && (
                 <div className="dropdown-menu dropdown-menu-right">
+                  <button
+                    type="button"
+                    className="dropdown-menu-item"
+                    onClick={() => {
+                      setShowMenu(false);
+                      onSwitchSpace(otherSpace);
+                    }}
+                  >
+                    Switch to {SPACE_LABELS[otherSpace]}
+                  </button>
                   <button
                     type="button"
                     className="dropdown-menu-item"

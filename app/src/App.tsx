@@ -1086,6 +1086,7 @@ export default function App() {
           onOpenQueue={() => goScreen('queue')}
           onOpenPlaylists={() => goScreen('playlists')}
           onOpenMatrix={() => goScreen('matrix')}
+          onSwitchSpace={handleSwitchSpace}
           onOpenAddSong={() => {
             setAddSongOrigin('results');
             goScreen('addsong');
