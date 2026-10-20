@@ -202,6 +202,12 @@ async function performSetMemorized(songId: string, memorized: boolean): Promise<
   return withComputedTags(mapSongRow(data));
 }
 
+// What a song will look like once a rating/memorized change lands, so the UI
+// can show it immediately while the real write is still in flight.
+export function previewSongChange(song: Song, patch: Partial<Song>): Song {
+  return withComputedTags({ ...song, ...patch });
+}
+
 function optimisticSong(songId: string, patch: Partial<Song>): Song | null {
   const cached = loadSnapshot(currentSpace);
   const existing = cached?.songs.find((s) => s.id === songId);

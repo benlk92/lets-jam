@@ -28,6 +28,7 @@ import {
   loadCachedSnapshot,
   markCategoryNotApplicable,
   pendingWriteCount,
+  previewSongChange,
   rateSong,
   removeRatingEntry,
   renameCategory,
@@ -745,24 +746,55 @@ export default function App() {
     saveScrollSpeeds(next);
   }
 
-  async function handleRate(label: string) {
+  // Rating shows its result and returns right away; the database write
+  // finishes in the background. If the server rejects it (a network drop is
+  // handled separately — that gets queued for later), the song goes back to
+  // how it was and the user is told, rather than leaving a rating on screen
+  // that was never saved.
+  function handleRate(label: string) {
     if (!activeSong) return;
-    const updated = await rateSong(activeSong.id, label);
-    applySongUpdate(updated);
-    setPendingCount(pendingWriteCount());
-    handleRemoveFromQueue(activeSong.id);
+    const before = activeSong;
+    applySongUpdate(
+      previewSongChange(before, {
+        lastRatingLabel: label,
+        lastPlayedAt: new Date().toISOString(),
+        playCount: before.playCount + 1,
+      }),
+    );
+    handleRemoveFromQueue(before.id);
     goScreen(activeSongOrigin);
+    rateSong(before.id, label).then(
+      (updated) => {
+        applySongUpdate(updated);
+        setPendingCount(pendingWriteCount());
+      },
+      (err) => {
+        console.error(err);
+        applySongUpdate(before);
+        window.alert(`Couldn't save the rating for "${before.title}", so it was undone. Please try again.`);
+      },
+    );
   }
 
   function handleSkipAssessment() {
     goScreen(activeSongOrigin);
   }
 
-  async function handleToggleMemorized(memorized: boolean) {
+  function handleToggleMemorized(memorized: boolean) {
     if (!activeSong) return;
-    const updated = await setMemorized(activeSong.id, memorized);
-    applySongUpdate(updated);
-    setPendingCount(pendingWriteCount());
+    const before = activeSong;
+    applySongUpdate(previewSongChange(before, { memorized }));
+    setMemorized(before.id, memorized).then(
+      (updated) => {
+        applySongUpdate(updated);
+        setPendingCount(pendingWriteCount());
+      },
+      (err) => {
+        console.error(err);
+        applySongUpdate(before);
+        window.alert(`Couldn't save that change for "${before.title}", so it was undone. Please try again.`);
+      },
+    );
   }
 
   async function handleUpdateTag(songId: string, categoryId: string, value: TagValue | null) {
