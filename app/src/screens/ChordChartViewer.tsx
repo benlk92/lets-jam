@@ -1,21 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Song } from '../types';
+import type { ScrollSpeeds } from '../lib/scrollSpeeds';
 import { chordLineToNumbers, detectKey, KEY_NAMES, transposeChordChart, wrapChordChart } from '../lib/chordChart';
 
 interface ChordChartViewerProps {
   song: Song;
+  speeds: ScrollSpeeds;
   loadAudioUrl: (path: string) => Promise<string>;
   onBack: () => void;
 }
 
 type Speed = 'off' | 'slow' | 'medium' | 'fast';
-
-// Pixels per second — tuned for reading pace, not proportional to anything.
-const SPEED_PX_PER_SEC: Record<Exclude<Speed, 'off'>, number> = {
-  slow: 9,
-  medium: 18,
-  fast: 35,
-};
 
 // Playback only — adding/renaming/removing recordings stays in the tag
 // editor. Fetched on demand, same as the tag editor's list, rather than the
@@ -68,7 +63,7 @@ function RecordingPlayback({
   );
 }
 
-export default function ChordChartViewer({ song, loadAudioUrl, onBack }: ChordChartViewerProps) {
+export default function ChordChartViewer({ song, speeds, loadAudioUrl, onBack }: ChordChartViewerProps) {
   const [semitones, setSemitones] = useState(0);
   const [showNumbers, setShowNumbers] = useState(false);
   const [keyOverride, setKeyOverride] = useState<number | null>(null);
@@ -86,7 +81,7 @@ export default function ChordChartViewer({ song, loadAudioUrl, onBack }: ChordCh
     if (speed === 'off') return;
     const el = bodyRef.current;
     if (!el) return;
-    const pxPerSec = SPEED_PX_PER_SEC[speed];
+    const pxPerSec = speeds[speed];
     let position = el.scrollTop;
     let last = performance.now();
     let frame = 0;
@@ -101,7 +96,7 @@ export default function ChordChartViewer({ song, loadAudioUrl, onBack }: ChordCh
     }
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [speed]);
+  }, [speed, speeds]);
 
   // The page itself must never move while playing: lock the document, and
   // route any drag that starts outside the lyrics (toolbar, gaps) into them.

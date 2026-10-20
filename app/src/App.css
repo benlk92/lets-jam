@@ -1709,3 +1709,29 @@
   font: inherit;
   font-weight: 700;
 }
+
+.settings-speed-grid {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-speed-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.settings-speed-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 15px;
+}

@@ -90,6 +90,7 @@ import PlaylistDetailScreen from './screens/PlaylistDetail';
 import PlaylistMatrix from './screens/PlaylistMatrix';
 import Matrix from './screens/Matrix';
 import { useResultsScrollMemory } from './lib/useResultsScrollMemory';
+import { loadScrollSpeeds, saveScrollSpeeds, type ScrollSpeeds } from './lib/scrollSpeeds';
 import SongTagEditor from './components/SongTagEditor';
 import './App.css';
 
@@ -280,6 +281,7 @@ export default function App() {
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [openUgOnTap, setOpenUgOnTapState] = useState(loadOpenUgOnTap);
+  const [scrollSpeeds, setScrollSpeedsState] = useState(loadScrollSpeeds);
   const [initialQueueState] = useState(loadQueueState);
   const [queue, setQueue] = useState<QueueEntry[]>(initialQueueState.entries);
   const [importedFromPlaylistId, setImportedFromPlaylistId] = useState<string | null>(
@@ -763,11 +765,11 @@ export default function App() {
     });
     setSortCriteria(
       next
-        ? [{ key: 'staleness', direction: 'desc' }]
-        : [
-            { key: 'performance_confidence', direction: 'desc' },
-            { key: 'artist', direction: 'asc' },
-          ],
+        ? [
+            { key: 'staleness', direction: 'desc' },
+            { key: 'title', direction: 'asc' },
+          ]
+        : DEFAULT_SORT_CRITERIA,
     );
   }
 
@@ -785,6 +787,11 @@ export default function App() {
     setActiveSongId(song.id);
     setChordChartOrigin('results');
     goScreen('chordChart');
+  }
+
+  function handleChangeScrollSpeeds(next: ScrollSpeeds) {
+    setScrollSpeedsState(next);
+    saveScrollSpeeds(next);
   }
 
   function handleToggleOpenUgOnTap(value: boolean) {
@@ -1181,6 +1188,8 @@ export default function App() {
           onSelectSong={handleSelectSong}
           onOpenAddSong={() => goScreen('addsong')}
           openUgOnTap={openUgOnTap}
+          scrollSpeeds={scrollSpeeds}
+          onChangeScrollSpeeds={handleChangeScrollSpeeds}
           onToggleOpenUgOnTap={handleToggleOpenUgOnTap}
           space={space}
           onSwitchSpace={handleSwitchSpace}
@@ -1297,6 +1306,7 @@ export default function App() {
       {screen === 'chordChart' && activeSong && (
         <ChordChartViewer
           song={activeSong}
+          speeds={scrollSpeeds}
           loadAudioUrl={getSongAudioUrl}
           onBack={() => goScreen(chordChartOrigin)}
         />

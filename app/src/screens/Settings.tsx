@@ -3,6 +3,7 @@ import type { Category, RatingScaleEntry, Song, Space } from '../types';
 import { SPACE_LABELS } from '../types';
 import { GENRE_CATEGORY_ID } from '../lib/filtering';
 import ManageValues from './ManageValues';
+import { DEFAULT_SCROLL_SPEEDS, MAX_SCROLL_SPEED, MIN_SCROLL_SPEED, type ScrollSpeeds } from '../lib/scrollSpeeds';
 
 interface SettingsProps {
   space: Space;
@@ -29,6 +30,8 @@ interface SettingsProps {
   onOpenAddSong: () => void;
   openUgOnTap: boolean;
   onToggleOpenUgOnTap: (value: boolean) => void;
+  scrollSpeeds: ScrollSpeeds;
+  onChangeScrollSpeeds: (speeds: ScrollSpeeds) => void;
   leaders: string[];
   onAddLeader: (name: string) => Promise<boolean>;
   onRenameLeader: (oldName: string, newName: string) => void;
@@ -37,6 +40,32 @@ interface SettingsProps {
 }
 
 const SONG_SEARCH_LIMIT = 20;
+const SPEED_NAMES = ['slow', 'medium', 'fast'] as const;
+
+// Keeps what's being typed locally so the field can be cleared and retyped;
+// a value is only saved once it's a valid speed, and the field snaps back to
+// the saved one when it loses focus.
+function SpeedField({ label, value, onCommit }: { label: string; value: number; onCommit: (value: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <label className="settings-speed-field">
+      <span>{label}</span>
+      <input
+        type="number"
+        inputMode="decimal"
+        min={MIN_SCROLL_SPEED}
+        max={MAX_SCROLL_SPEED}
+        value={draft ?? String(value)}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          const parsed = Number(e.target.value);
+          if (e.target.value !== '' && parsed >= MIN_SCROLL_SPEED && parsed <= MAX_SCROLL_SPEED) onCommit(parsed);
+        }}
+        onBlur={() => setDraft(null)}
+      />
+    </label>
+  );
+}
 
 export default function Settings({
   space,
@@ -63,6 +92,8 @@ export default function Settings({
   onOpenAddSong,
   openUgOnTap,
   onToggleOpenUgOnTap,
+  scrollSpeeds,
+  onChangeScrollSpeeds,
   leaders,
   onAddLeader,
   onRenameLeader,
@@ -196,6 +227,30 @@ export default function Settings({
             ? "Opening a song's rating screen also opens its chords/lyrics."
             : "Opening a song's rating screen only opens the rating screen — the link stays available there."}
         </p>
+      </section>
+
+      <section className="settings-section">
+        <h2>Lyrics Auto-Scroll</h2>
+        <p className="modal-subtitle">
+          How fast the lyrics scroll on the Slow, Medium and Fast buttons, in pixels per second. Saved on this device.
+        </p>
+        <div className="settings-speed-grid">
+          {SPEED_NAMES.map((name) => (
+            <SpeedField
+              key={name}
+              label={name.charAt(0).toUpperCase() + name.slice(1)}
+              value={scrollSpeeds[name]}
+              onCommit={(value) => onChangeScrollSpeeds({ ...scrollSpeeds, [name]: value })}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          className="btn btn-ghost btn-small"
+          onClick={() => onChangeScrollSpeeds(DEFAULT_SCROLL_SPEEDS)}
+        >
+          Reset to defaults
+        </button>
       </section>
 
       <section className="settings-section">
