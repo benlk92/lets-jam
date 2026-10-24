@@ -5,3 +5,6 @@ scripts/.env.*
 scripts/node_modules
 
 .DS_Store
+
+# Local data backups (contain song data, recordings, and the app passphrase) — never commit.
+scripts/backups/
