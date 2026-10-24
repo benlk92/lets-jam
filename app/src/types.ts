@@ -1,12 +1,13 @@
-// Two independent song libraries sharing one app — never mixed, never
-// queried together. Not a security boundary (see the spaces migration);
-// purely a data partition the client filters/writes by.
-export type Space = 'pop_songs' | 'circle_songs';
-
-export const SPACE_LABELS: Record<Space, string> = {
-  pop_songs: 'Pop Songs',
-  circle_songs: 'Circle Songs',
-};
+// A password-protected database of songs. Songs themselves (title, artist,
+// link, lyrics) live in one shared library; each database holds its own
+// tags, ratings, playlists and categories on top of them.
+export interface DatabaseInfo {
+  id: string;
+  name: string;
+  // Whether songs here usually come from Ultimate Guitar — enables the "search
+  // Ultimate Guitar" fallback for songs with no link of their own.
+  ugSearchFallback: boolean;
+}
 
 export interface Category {
   id: string;
@@ -45,7 +46,17 @@ export interface SongRecording {
 }
 
 export interface Song {
+  // The song's entry in the open database (not the shared library's id — see
+  // sharedSongId). Playlists, the queue, and recordings all key off this.
   id: string;
+  sharedSongId: string;
+  // The database that created the song and is the only one that can edit its
+  // title, artist, link, and shared lyrics/genre.
+  ownerDbId: string;
+  isOwner: boolean;
+  // Non-owner databases can unlink lyrics or genre to keep their own version.
+  lyricsUnlinked: boolean;
+  genreUnlinked: boolean;
   title: string;
   artist: string;
   ultimateGuitarUrl: string;

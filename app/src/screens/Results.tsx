@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Category, CategoryFilter, FilterState, PlaylistSummary, QueueEntry, RatingScaleEntry, Song, Space } from '../types';
-import { SPACE_LABELS } from '../types';
+import type { Category, CategoryFilter, FilterState, PlaylistSummary, QueueEntry, RatingScaleEntry, Song } from '../types';
 import { formatStaleness, stalenessDays } from '../lib/staleness';
 import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
@@ -22,7 +21,9 @@ function useClickOutside(active: boolean, setActive: (value: boolean) => void) {
 }
 
 interface ResultsProps {
-  space: Space;
+  // Whether songs in this database usually come from Ultimate Guitar (enables
+  // the "search Ultimate Guitar" fallback for songs with no link).
+  ugSearchFallback: boolean;
   songs: Song[];
   totalCount: number;
   ratingScale: RatingScaleEntry[];
@@ -38,7 +39,7 @@ interface ResultsProps {
   onOpenPlaylists: () => void;
   onOpenMatrix: () => void;
   onOpenAddSong: () => void;
-  onSwitchSpace: (space: Space) => void;
+  onOpenDatabases: () => void;
   onOpenPickerChooser: () => void;
   onToggleQueue: (song: Song) => void;
   onOpenAssessment: (song: Song) => void;
@@ -60,7 +61,7 @@ function filterLabel(category: Category, filter: CategoryFilter): string {
 }
 
 export default function Results({
-  space,
+  ugSearchFallback,
   songs,
   totalCount,
   ratingScale,
@@ -76,7 +77,7 @@ export default function Results({
   onOpenPlaylists,
   onOpenMatrix,
   onOpenAddSong,
-  onSwitchSpace,
+  onOpenDatabases,
   onOpenPickerChooser,
   onToggleQueue,
   onOpenAssessment,
@@ -91,8 +92,7 @@ export default function Results({
 }: ResultsProps) {
   const [showMenu, setShowMenu] = useState(false);
   const hamburgerRef = useClickOutside(showMenu, setShowMenu);
-  const isPopSongs = space === 'pop_songs';
-  const otherSpace: Space = isPopSongs ? 'circle_songs' : 'pop_songs';
+  const isPopSongs = ugSearchFallback;
 
   const [playlistPickerSongId, setPlaylistPickerSongId] = useState<string | null>(null);
   const playlistPickerRef = useClickOutside(playlistPickerSongId !== null, () => setPlaylistPickerSongId(null));
@@ -145,10 +145,10 @@ export default function Results({
                     className="dropdown-menu-item"
                     onClick={() => {
                       setShowMenu(false);
-                      onSwitchSpace(otherSpace);
+                      onOpenDatabases();
                     }}
                   >
-                    Switch to {SPACE_LABELS[otherSpace]}
+                    Switch database
                   </button>
                   <button
                     type="button"

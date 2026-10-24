@@ -1,8 +1,8 @@
-import type { RatingScaleEntry, Song, Space } from '../types';
+import type { RatingScaleEntry, Song } from '../types';
 import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
 interface AssessmentProps {
-  space: Space;
+  ugSearchFallback: boolean;
   song: Song;
   ratingScale: RatingScaleEntry[];
   onRate: (label: string) => void;
@@ -15,7 +15,7 @@ interface AssessmentProps {
 }
 
 export default function Assessment({
-  space,
+  ugSearchFallback,
   song,
   ratingScale,
   onRate,
@@ -26,7 +26,7 @@ export default function Assessment({
   onBack,
   backLabel = 'Back to results',
 }: AssessmentProps) {
-  const isPopSongs = space === 'pop_songs';
+  const isPopSongs = ugSearchFallback;
   return (
     <div className="screen assessment">
       <button type="button" className="btn btn-ghost" onClick={onBack}>

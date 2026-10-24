@@ -4,9 +4,11 @@ interface ChordChartEditorProps {
   onChange: (value: string) => void;
   // Fires on blur, to persist the edit.
   onCommit: (value: string) => void;
+  // Shown but not editable — for lyrics that belong to another database.
+  readOnly?: boolean;
 }
 
-export default function ChordChartEditor({ value, onChange, onCommit }: ChordChartEditorProps) {
+export default function ChordChartEditor({ value, onChange, onCommit, readOnly = false }: ChordChartEditorProps) {
   return (
     <div className="chord-chart-editor">
       <textarea
@@ -17,6 +19,7 @@ export default function ChordChartEditor({ value, onChange, onCommit }: ChordCha
           'so the spacing between chords and lyrics comes along…\n\nA\nTwenty-five years and my life is still'
         }
         spellCheck={false}
+        readOnly={readOnly}
         onChange={(e) => onChange(e.target.value)}
         onBlur={() => onCommit(value)}
       />

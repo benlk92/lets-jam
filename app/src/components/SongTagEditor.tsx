@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Category, RatingScaleEntry, Song, Space, TagValue } from '../types';
-import { categoryValues } from '../lib/filtering';
+import type { Category, RatingScaleEntry, Song, TagValue } from '../types';
+import { categoryValues, GENRE_CATEGORY_ID } from '../lib/filtering';
 import CategoryValueEditor from './CategoryValueEditor';
 import ChipGroup from './ChipGroup';
 import ChordChartEditor from './ChordChartEditor';
@@ -8,7 +8,9 @@ import AudioAttachment from './AudioAttachment';
 import { buildUltimateGuitarSearchUrl } from '../lib/ultimateGuitar';
 
 interface SongTagEditorProps {
-  space: Space;
+  ugSearchFallback: boolean;
+  // Name of the database that created this song and can edit its shared fields.
+  ownerName: string;
   song: Song;
   categories: Category[];
   allSongs: Song[];
@@ -18,6 +20,8 @@ interface SongTagEditorProps {
   onUpdateTitleArtist: (title: string, artist: string) => void;
   onUpdateUrl: (url: string) => void;
   onUpdateChordChart: (chordChart: string) => void;
+  onUnlinkField: (field: 'lyrics' | 'genre') => void;
+  onRelinkField: (field: 'lyrics' | 'genre') => void;
   onAddRecording: (title: string, file: File) => Promise<void>;
   onRenameRecording: (recordingId: string, title: string) => Promise<void>;
   onRemoveRecording: (recordingId: string) => Promise<void>;
@@ -29,7 +33,8 @@ interface SongTagEditorProps {
 }
 
 export default function SongTagEditor({
-  space,
+  ugSearchFallback,
+  ownerName,
   song,
   categories,
   allSongs,
@@ -39,6 +44,8 @@ export default function SongTagEditor({
   onUpdateTitleArtist,
   onUpdateUrl,
   onUpdateChordChart,
+  onUnlinkField,
+  onRelinkField,
   onAddRecording,
   onRenameRecording,
   onRemoveRecording,
@@ -52,10 +59,13 @@ export default function SongTagEditor({
   const [artist, setArtist] = useState(song.artist);
   const [url, setUrl] = useState(song.ultimateGuitarUrl);
   const [chordChart, setChordChart] = useState(song.chordChart ?? '');
-  const isPopSongs = space === 'pop_songs';
+  const isPopSongs = ugSearchFallback;
 
   function handleDelete() {
-    const confirmed = window.confirm(`Delete "${song.title}" by ${song.artist}? This can't be undone.`);
+    const confirmed = window.confirm(
+      `Remove "${song.title}" by ${song.artist} from this database? Its tags, ratings, and recordings here will be deleted. ` +
+        `The song itself stays in the shared library for any other database that uses it.`,
+    );
     if (confirmed) onDelete();
   }
 
@@ -86,6 +96,7 @@ export default function SongTagEditor({
             <input
               className="url-input"
               value={title}
+              readOnly={!song.isOwner}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={commitTitleArtist}
             />
@@ -96,9 +107,15 @@ export default function SongTagEditor({
             <input
               className="url-input"
               value={artist}
+              readOnly={!song.isOwner}
               onChange={(e) => setArtist(e.target.value)}
               onBlur={commitTitleArtist}
             />
+            {!song.isOwner && (
+              <p className="modal-subtitle">
+                Shared song created by {ownerName} — only that database can change its title, artist, or link.
+              </p>
+            )}
           </section>
 
           <section className="tag-editor-row">
@@ -108,6 +125,7 @@ export default function SongTagEditor({
                 type="url"
                 className="url-input"
                 value={url}
+                readOnly={!song.isOwner}
                 placeholder={isPopSongs ? 'https://tabs.ultimate-guitar.com/…' : 'https://…'}
                 onChange={(e) => setUrl(e.target.value)}
                 onBlur={() => {
@@ -134,12 +152,42 @@ export default function SongTagEditor({
             <h3>Chord Chart / Lyrics</h3>
             <ChordChartEditor
               value={chordChart}
+              readOnly={!song.isOwner && !song.lyricsUnlinked}
               onChange={setChordChart}
               onCommit={(value) => {
                 setChordChart(value);
                 if (value !== (song.chordChart ?? '')) onUpdateChordChart(value);
               }}
             />
+            {song.isOwner && (
+              <p className="modal-subtitle">Shared with every database that uses this song.</p>
+            )}
+            {!song.isOwner && !song.lyricsUnlinked && (
+              <>
+                <p className="modal-subtitle">
+                  Following the lyrics from {ownerName}. Unlink to keep your own version in this database.
+                </p>
+                <button type="button" className="btn btn-ghost btn-small" onClick={() => onUnlinkField('lyrics')}>
+                  Unlink lyrics
+                </button>
+              </>
+            )}
+            {!song.isOwner && song.lyricsUnlinked && (
+              <>
+                <p className="modal-subtitle">This database has its own copy of the lyrics.</p>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-small"
+                  onClick={() => {
+                    if (window.confirm(`Go back to following the lyrics from ${ownerName}? Your version here will be discarded.`)) {
+                      onRelinkField('lyrics');
+                    }
+                  }}
+                >
+                  Relink to shared lyrics
+                </button>
+              </>
+            )}
           </section>
 
           <section className="tag-editor-row">
@@ -202,12 +250,25 @@ export default function SongTagEditor({
                   onChange={(value) => onUpdateTag(category.id, value)}
                   onAddValue={() => {}}
                 />
+                {category.id === GENRE_CATEGORY_ID && !song.isOwner && !song.genreUnlinked && (
+                  <p className="modal-subtitle">
+                    Following the genre set by {ownerName}. Changing it here gives this database its own.
+                  </p>
+                )}
+                {category.id === GENRE_CATEGORY_ID && !song.isOwner && song.genreUnlinked && (
+                  <p className="modal-subtitle">
+                    This database has its own genre for the song.{' '}
+                    <button type="button" className="inline-link" onClick={() => onRelinkField('genre')}>
+                      Relink to the shared genre
+                    </button>
+                  </p>
+                )}
               </section>
             ))}
 
           <section className="tag-editor-row">
             <button type="button" className="btn btn-danger" onClick={handleDelete}>
-              Delete Song
+              Remove from this database
             </button>
           </section>
         </div>

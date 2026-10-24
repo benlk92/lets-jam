@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import type { Category, RatingScaleEntry, Song, Space } from '../types';
-import { SPACE_LABELS } from '../types';
+import type { Category, DatabaseInfo, Song } from '../types';
 import { GENRE_CATEGORY_ID } from '../lib/filtering';
 import ManageValues from './ManageValues';
 import { DEFAULT_SCROLL_SPEEDS, MAX_SCROLL_SPEED, MIN_SCROLL_SPEED, type ScrollSpeeds } from '../lib/scrollSpeeds';
 
 interface SettingsProps {
-  space: Space;
-  onSwitchSpace: (space: Space) => void;
+  database: DatabaseInfo;
+  onSwitchDatabase: () => void;
+  onOpenGlobalSettings: () => void;
   categories: Category[];
   songs: Song[];
-  ratingScale: RatingScaleEntry[];
   onBack: () => void;
   onAddCategory: (name: string) => void;
   onRenameCategory: (id: string, name: string) => void;
@@ -23,9 +22,6 @@ interface SettingsProps {
   onAddValue: (categoryId: string, value: string) => void;
   onReorderValue: (categoryId: string, orderedValues: string[]) => void;
   onStartGapFill: (categoryId: string) => void;
-  onAddRating: (label: string, intervalDays: number) => void;
-  onUpdateRating: (oldLabel: string, next: RatingScaleEntry) => void;
-  onRemoveRating: (label: string) => void;
   onOpenAddSong: () => void;
   scrollSpeeds: ScrollSpeeds;
   onChangeScrollSpeeds: (speeds: ScrollSpeeds) => void;
@@ -64,11 +60,11 @@ function SpeedField({ label, value, onCommit }: { label: string; value: number; 
 }
 
 export default function Settings({
-  space,
-  onSwitchSpace,
+  database,
+  onSwitchDatabase,
+  onOpenGlobalSettings,
   categories,
   songs,
-  ratingScale,
   onBack,
   onAddCategory,
   onRenameCategory,
@@ -81,9 +77,6 @@ export default function Settings({
   onAddValue,
   onReorderValue,
   onStartGapFill,
-  onAddRating,
-  onUpdateRating,
-  onRemoveRating,
   onOpenAddSong,
   scrollSpeeds,
   onChangeScrollSpeeds,
@@ -96,8 +89,6 @@ export default function Settings({
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [valuesModalCategoryId, setValuesModalCategoryId] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newRatingLabel, setNewRatingLabel] = useState('');
-  const [newRatingInterval, setNewRatingInterval] = useState('');
   const [editingLeader, setEditingLeader] = useState<string | null>(null);
   const [newLeaderName, setNewLeaderName] = useState('');
 
@@ -143,27 +134,11 @@ export default function Settings({
     setNewCategoryName('');
   }
 
-  function handleAddRating() {
-    const label = newRatingLabel.trim();
-    const intervalDays = Number(newRatingInterval);
-    if (!label || !Number.isFinite(intervalDays)) return;
-    onAddRating(label, intervalDays);
-    setNewRatingLabel('');
-    setNewRatingInterval('');
-  }
-
   function handleRetireCategory(category: Category) {
     const confirmed = window.confirm(
       `Retire "${category.name}"? It'll disappear from Guided Picker, Filters, and Sort. Songs keep whatever value they already had, but you won't be able to see or edit it anymore.`,
     );
     if (confirmed) onRetireCategory(category.id);
-  }
-
-  function handleRemoveRating(label: string) {
-    const confirmed = window.confirm(
-      `Remove "${label}" from the rating scale? Songs already rated ${label} keep that rating, but it won't count toward staleness or show up as an option to pick again.`,
-    );
-    if (confirmed) onRemoveRating(label);
   }
 
   return (
@@ -179,21 +154,18 @@ export default function Settings({
       </section>
 
       <section className="settings-section">
-        <h2>Database</h2>
+        <h2>{database.name}</h2>
         <p className="modal-subtitle">
-          Two separate song libraries — categories, tags, and songs never mix between them.
+          Tags, categories, ratings and playlists belong to this database. Song titles, artists, links, lyrics and
+          genres are shared with every database.
         </p>
         <div className="settings-space-toggle">
-          {(Object.keys(SPACE_LABELS) as Space[]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={`btn ${s === space ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => onSwitchSpace(s)}
-            >
-              {SPACE_LABELS[s]}
-            </button>
-          ))}
+          <button type="button" className="btn btn-ghost" onClick={onSwitchDatabase}>
+            Switch database
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={onOpenGlobalSettings}>
+            Global settings
+          </button>
         </div>
       </section>
 
@@ -306,9 +278,11 @@ export default function Settings({
                     <button
                       type="button"
                       className="btn btn-ghost btn-small"
-                      onClick={() => setValuesModalCategoryId(category.id)}
+                      onClick={() =>
+                        category.id === GENRE_CATEGORY_ID ? onOpenGlobalSettings() : setValuesModalCategoryId(category.id)
+                      }
                     >
-                      Values
+                      {category.id === GENRE_CATEGORY_ID ? 'Values (global)' : 'Values'}
                     </button>
                   )}
                   <button
@@ -348,75 +322,9 @@ export default function Settings({
       </section>
 
       <section className="settings-section">
-        <h2>Rating Scale</h2>
-        <p className="modal-subtitle">
-          Rating a song resets its staleness clock by this many days. Renaming a label updates every song already
-          rated with it.
-        </p>
-
-        <div className="settings-rating-list">
-          {ratingScale.map((entry) => (
-            <div key={entry.label} className="settings-rating-row">
-              <input
-                className="settings-rating-label"
-                defaultValue={entry.label}
-                onBlur={(e) => {
-                  const label = e.target.value.trim();
-                  if (label && label !== entry.label) {
-                    onUpdateRating(entry.label, { label, intervalDays: entry.intervalDays });
-                  }
-                }}
-              />
-              <input
-                type="number"
-                className="settings-rating-interval"
-                defaultValue={entry.intervalDays}
-                min={0}
-                onBlur={(e) => {
-                  const intervalDays = Number(e.target.value);
-                  if (Number.isFinite(intervalDays) && intervalDays !== entry.intervalDays) {
-                    onUpdateRating(entry.label, { label: entry.label, intervalDays });
-                  }
-                }}
-              />
-              <span className="settings-rating-unit">days</span>
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => handleRemoveRating(entry.label)}
-                aria-label={`Remove ${entry.label}`}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-
-        <div className="settings-add-row">
-          <input
-            className="settings-add-name"
-            placeholder="Label"
-            value={newRatingLabel}
-            onChange={(e) => setNewRatingLabel(e.target.value)}
-          />
-          <input
-            type="number"
-            className="settings-rating-interval"
-            placeholder="Days"
-            min={0}
-            value={newRatingInterval}
-            onChange={(e) => setNewRatingInterval(e.target.value)}
-          />
-          <button type="button" className="btn btn-primary" onClick={handleAddRating}>
-            Add
-          </button>
-        </div>
-      </section>
-
-      <section className="settings-section">
         <h2>Playlist Leaders</h2>
         <p className="modal-subtitle">
-          Shared across both databases. Shows up as the leader dropdown when assigning a leader to a song within a
+          Belongs to this database. Shows up as the leader dropdown when assigning a leader to a song within a
           playlist.
         </p>
 

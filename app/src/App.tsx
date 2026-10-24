@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   Category,
   CategoryFilter,
@@ -10,18 +10,28 @@ import type {
   RatingScaleEntry,
   Song,
   SortCriterion,
-  Space,
   TagValue,
+  DatabaseInfo,
 } from './types';
 import {
   addCategory,
   addCategoryValue,
+  addLibrarySong,
   addRatingEntry,
-  addSong,
   clearNotApplicable,
+  createDatabase,
+  createSong,
   deleteCategoryValue,
-  deleteSong,
+  DuplicateSongError,
+  findSongMatches,
   getAppKeyRole,
+  getGenreValues,
+  listDatabases,
+  relinkSongField,
+  removeSongFromDatabase,
+  searchLibrary,
+  unlinkSongField,
+  unlockDatabase,
   getCategories,
   getRatingScale,
   getSongs,
@@ -38,7 +48,7 @@ import {
   retireCategory,
   setCategoryGuidedPickerEnabled,
   setCategoryScatterPickerEnabled,
-  setCurrentSpace,
+  setCurrentDatabase,
   setMemorized,
   syncPendingWrites,
   updateRatingEntry,
@@ -69,7 +79,7 @@ import {
   reorderPlaylistLeaders,
 } from './data/store';
 import { isNetworkError } from './data/offlineCache';
-import { initSupabaseClient } from './data/supabaseClient';
+import { initSupabaseClient, setDatabaseCredentials } from './data/supabaseClient';
 import { filterSongs, GENRE_CATEGORY_ID, shuffledSample, sortSongs } from './lib/filtering';
 import { buildGapFillQueue, gapFillAt, gapFillTotal, type GapFillMode, type GapFillQueue } from './lib/gapfill';
 import PassphraseGate from './screens/PassphraseGate';
@@ -83,6 +93,8 @@ import Assessment from './screens/Assessment';
 import ChordChartViewer from './screens/ChordChartViewer';
 import GapFill from './screens/GapFill';
 import Settings from './screens/Settings';
+import Databases from './screens/Databases';
+import GlobalSettings from './screens/GlobalSettings';
 import AddSong from './screens/AddSong';
 import SongQueue from './screens/SongQueue';
 import Playlists from './screens/Playlists';
@@ -97,6 +109,8 @@ import './App.css';
 type Screen =
   | 'loading'
   | 'passphrase'
+  | 'databases'
+  | 'globalSettings'
   | 'picker'
   | 'scatter'
   | 'pickerChooser'
@@ -199,24 +213,61 @@ function saveQueueState(state: StoredQueueState) {
   }
 }
 
-// Which of the two independent song libraries is active — device-local,
-// like the queue above, not something the passphrase or the data itself
-// determines.
-const SPACE_KEY = 'songapp:space';
+// Each database has its own password. The ones this device has unlocked are
+// remembered (like the app passphrase) so reopening one is a single tap, and
+// the last-opened one is reopened automatically on launch.
+const DB_KEYS_KEY = 'songapp:databaseKeys:v1';
+const LAST_DB_KEY = 'songapp:lastDatabase:v1';
+const DB_LIST_KEY = 'songapp:databaseList:v1';
 
-function loadSpace(): Space {
+function loadDbKeys(): Record<string, string> {
   try {
-    return localStorage.getItem(SPACE_KEY) === 'circle_songs' ? 'circle_songs' : 'pop_songs';
+    const parsed = JSON.parse(localStorage.getItem(DB_KEYS_KEY) ?? '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
-    return 'pop_songs';
+    return {};
   }
 }
 
-function saveSpace(space: Space) {
+function saveDbKeys(keys: Record<string, string>) {
   try {
-    localStorage.setItem(SPACE_KEY, space);
+    localStorage.setItem(DB_KEYS_KEY, JSON.stringify(keys));
   } catch {
-    // localStorage unavailable — reverts to Pop Songs next load
+    // localStorage unavailable — databases just need unlocking again next load
+  }
+}
+
+function loadLastDb(): string | null {
+  try {
+    return localStorage.getItem(LAST_DB_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveLastDb(id: string) {
+  try {
+    localStorage.setItem(LAST_DB_KEY, id);
+  } catch {
+    // localStorage unavailable — lands on the picker next load
+  }
+}
+
+// Cached so a launch with no connection can still name the last database.
+function loadDbList(): DatabaseInfo[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DB_LIST_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDbList(list: DatabaseInfo[]) {
+  try {
+    localStorage.setItem(DB_LIST_KEY, JSON.stringify(list));
+  } catch {
+    // best-effort
   }
 }
 
@@ -275,8 +326,13 @@ export default function App() {
   const [role, setRole] = useState<Role>(initialPassphrase?.role ?? 'admin');
   const canEdit = role === 'admin';
 
-  const [initialSpace] = useState(loadSpace);
-  const [space, setSpaceState] = useState<Space>(initialSpace);
+  const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
+  const [database, setDatabase] = useState<DatabaseInfo | null>(null);
+  const [dbKeys, setDbKeys] = useState<Record<string, string>>(loadDbKeys);
+  const [genreValues, setGenreValues] = useState<string[]>([]);
+  const [globalSettingsOrigin, setGlobalSettingsOrigin] = useState<'settings' | 'databases'>('databases');
+  // The database the saved queue belongs to — opening a different one clears it.
+  const loadLastDbBeforeOpen = useRef<string | null>(loadLastDb());
 
   async function loadAppData() {
     try {
@@ -315,41 +371,169 @@ export default function App() {
     }
   }
 
+  // Opening a database scopes everything the app reads or writes to it: the
+  // requests carry its password, and anything tied to the database we're
+  // leaving (queue, filters, playlists) is dropped.
+  async function openDatabase(next: DatabaseInfo, password: string) {
+    const switching = database?.id !== next.id;
+    setDatabaseCredentials({ id: next.id, password });
+    setCurrentDatabase(next.id);
+    setDatabase(next);
+    saveLastDb(next.id);
+    if (switching) {
+      if (loadLastDbBeforeOpen.current !== next.id) setQueue([]);
+      setImportedFromPlaylistId(null);
+      setFilters({});
+      setSearch('');
+      setShowStaleness(false);
+      setSortCriteria(DEFAULT_SORT_CRITERIA);
+      setRandomTenIds(null);
+      setShowFilters(false);
+      setShowSort(false);
+      setActiveSongId(null);
+      setTagEditorSongId(null);
+      setActivePlaylistId(null);
+      setActivePlaylist(null);
+      setSongs([]);
+      setCategories([]);
+      setPlaylists([]);
+      setLeaders([]);
+    }
+    loadLastDbBeforeOpen.current = next.id;
+    setScreen('loading');
+    await loadAppData();
+  }
+
+  // After the app passphrase is accepted: go straight to the database that was
+  // open last time if this device still has its password, else the picker.
+  async function enterApp() {
+    try {
+      const list = await listDatabases();
+      setDatabases(list);
+      saveDbList(list);
+      const lastId = loadLastDb();
+      const last = list.find((d) => d.id === lastId);
+      const key = last ? loadDbKeys()[last.id] : undefined;
+      if (last && key && (await unlockDatabase(last.id, key))) {
+        await openDatabase(last, key);
+        return;
+      }
+      setScreen('databases');
+    } catch (err) {
+      if (!isNetworkError(err)) throw err;
+      // No connection: reopen the last database from its saved copy, if any.
+      const list = loadDbList();
+      setDatabases(list);
+      const last = list.find((d) => d.id === loadLastDb());
+      const key = last ? loadDbKeys()[last.id] : undefined;
+      if (last && key) {
+        setDatabaseCredentials({ id: last.id, password: key });
+        setCurrentDatabase(last.id);
+        setDatabase(last);
+        loadLastDbBeforeOpen.current = last.id;
+        await loadAppData();
+      } else {
+        setOfflineUnavailable(true);
+      }
+    }
+  }
+
   useEffect(() => {
-    setCurrentSpace(initialSpace);
     if (initialPassphrase) {
       initSupabaseClient(initialPassphrase.value);
-      loadAppData();
+      enterApp();
     } else {
       setScreen('passphrase');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPassphrase]);
 
-  // A wrong passphrase isn't rejected with an error — RLS just filters every
-  // row to nothing — so "did this work" is judged by whether categories (a
-  // table that's never legitimately empty) actually came back. This check
-  // must stay network-only (no cache fallback) — otherwise typing any
-  // string while genuinely offline would appear to succeed against stale
-  // data left over from a previous, different passphrase.
+  // A wrong passphrase isn't rejected with an error — RLS just shows nothing —
+  // so "did this work" is judged by asking the database which role the key
+  // is. This check must stay network-only (no cache fallback) — otherwise
+  // typing any string while genuinely offline would appear to succeed.
   async function handlePassphraseSubmit(passphrase: string): Promise<string | null> {
     initSupabaseClient(passphrase);
     let resolvedRole: Role;
     try {
-      const categoriesCheck = await getCategories();
-      if (categoriesCheck.length === 0) return "That passphrase didn't work — try again.";
-      // Both keys pass the read check above — ask the database which one
-      // this actually is. Defaults to the more restrictive role if that
-      // somehow comes back unclear, rather than assuming admin.
-      resolvedRole = (await getAppKeyRole()) ?? 'viewer';
+      const role = await getAppKeyRole();
+      if (!role) return "That passphrase didn't work — try again.";
+      resolvedRole = role;
     } catch (err) {
       if (isNetworkError(err)) return "Can't verify right now — check your connection and try again.";
       return "That passphrase didn't work — try again.";
     }
     storePassphrase(passphrase, resolvedRole);
     setRole(resolvedRole);
-    await loadAppData();
+    await enterApp();
     return null;
+  }
+
+  // Resolves to an error message, or null once the database is open.
+  async function handleUnlockDatabase(target: DatabaseInfo, password: string): Promise<string | null> {
+    try {
+      if (!(await unlockDatabase(target.id, password))) return "That password didn't work — try again.";
+    } catch (err) {
+      if (isNetworkError(err)) return "Can't verify right now — check your connection and try again.";
+      return "That password didn't work — try again.";
+    }
+    const keys = { ...dbKeys, [target.id]: password };
+    setDbKeys(keys);
+    saveDbKeys(keys);
+    await openDatabase(target, password);
+    return null;
+  }
+
+  // A saved password can go stale (changed on the server) — confirm it still
+  // works before opening, and fall back to asking again if it doesn't.
+  async function handleOpenDatabase(target: DatabaseInfo) {
+    const password = dbKeys[target.id];
+    if (!password) return;
+    try {
+      if (!(await unlockDatabase(target.id, password))) {
+        const keys = { ...dbKeys };
+        delete keys[target.id];
+        setDbKeys(keys);
+        saveDbKeys(keys);
+        window.alert(`The password for ${target.name} has changed — please unlock it again.`);
+        return;
+      }
+    } catch (err) {
+      if (!isNetworkError(err)) throw err;
+      // Offline: trust the saved password and use the saved copy of the data.
+    }
+    await openDatabase(target, password);
+  }
+
+  async function handleCreateDatabase(name: string, password: string, ugSearchFallback: boolean): Promise<string | null> {
+    try {
+      const id = await createDatabase(name, password, ugSearchFallback);
+      const list = await listDatabases();
+      setDatabases(list);
+      saveDbList(list);
+      const created = list.find((d) => d.id === id);
+      if (!created) return 'The database was created but could not be opened — pick it from the list.';
+      const keys = { ...dbKeys, [id]: password };
+      setDbKeys(keys);
+      saveDbKeys(keys);
+      await openDatabase(created, password);
+      return null;
+    } catch (err) {
+      if (isNetworkError(err)) return "You're offline — creating a database needs a connection.";
+      return err instanceof Error ? err.message : 'Could not create the database.';
+    }
+  }
+
+  async function handleOpenGlobalSettings(origin: 'settings' | 'databases') {
+    setGlobalSettingsOrigin(origin);
+    try {
+      const [genres, ratings] = await Promise.all([getGenreValues(), getRatingScale()]);
+      setGenreValues(genres);
+      setRatingScale(ratings);
+    } catch {
+      // Falls back to whatever was loaded; the screen still opens.
+    }
+    goScreen('globalSettings');
   }
 
   // Once back online, flush any ratings/memorized-toggles made while
@@ -539,60 +723,26 @@ export default function App() {
     });
   }
 
-  // Switching spaces resets Filters/Sort to their defaults and clears the
-  // queue/Random-10 selection — those hold song ids from the space being
-  // left, which wouldn't resolve to anything in the new one. Rating scale
-  // and leaders aren't refetched: both are shared across both spaces.
-  async function handleSwitchSpace(next: Space) {
-    if (next === space) return;
-    setCurrentSpace(next);
-    setSpaceState(next);
-    saveSpace(next);
-    setFilters({});
-    setSearch('');
-    setSortCriteria(DEFAULT_SORT_CRITERIA);
-    setRandomTenIds(null);
-    setQueue([]);
-    setImportedFromPlaylistId(null);
-    setShowFilters(false);
-    setShowSort(false);
-    setActiveSongId(null);
-    setTagEditorSongId(null);
-    setActivePlaylistId(null);
-    setActivePlaylist(null);
-    setScreen('results');
-    try {
-      const [s, c, p] = await Promise.all([getSongs(), getCategories(), getPlaylists()]);
-      setSongs(s);
-      setCategories(c);
-      setPlaylists(p);
-      setIsOffline(false);
-    } catch (err) {
-      if (!isNetworkError(err)) throw err;
-      const cached = loadCachedSnapshot();
-      setSongs(cached?.songs ?? []);
-      setCategories(cached?.categories ?? []);
-      setPlaylists([]);
-      setIsOffline(true);
-    }
-  }
-
   // Returns whether the action succeeded. Non-network failures (a rejected
   // write, a constraint violation) are surfaced too — rethrowing them from a
   // click handler just becomes an unhandled rejection the user never sees,
   // which reads as "the button does nothing."
+  function reportFailure(err: unknown) {
+    if (isNetworkError(err)) {
+      window.alert("You're offline — this needs a connection.");
+    } else {
+      console.error(err);
+      const message = err instanceof Error ? err.message : (err as { message?: string })?.message;
+      window.alert(`That didn't save${message ? `: ${message}` : '.'}`);
+    }
+  }
+
   async function runOrAlertOffline(action: () => Promise<void>): Promise<boolean> {
     try {
       await action();
       return true;
     } catch (err) {
-      if (isNetworkError(err)) {
-        window.alert("You're offline — this needs a connection.");
-      } else {
-        console.error(err);
-        const message = err instanceof Error ? err.message : (err as { message?: string })?.message;
-        window.alert(`That didn't save${message ? `: ${message}` : '.'}`);
-      }
+      reportFailure(err);
       return false;
     }
   }
@@ -622,8 +772,8 @@ export default function App() {
   }, [sortedSongs, search]);
 
   const resultsListKey = useMemo(
-    () => JSON.stringify({ filters, includeUntagged, sortCriteria, randomTenIds, space, search }),
-    [filters, includeUntagged, sortCriteria, randomTenIds, space, search],
+    () => JSON.stringify({ filters, includeUntagged, sortCriteria, randomTenIds, db: database?.id, search }),
+    [filters, includeUntagged, sortCriteria, randomTenIds, database?.id, search],
   );
   useResultsScrollMemory(screen, resultsListKey);
 
@@ -805,17 +955,29 @@ export default function App() {
   }
 
   async function handleUpdateUrl(songId: string, url: string) {
+    const song = songs.find((s) => s.id === songId);
+    if (!song) return;
     await runOrAlertOffline(async () => {
-      const updated = await updateSongUrl(songId, url);
+      const updated = await updateSongUrl(song, url);
       applySongUpdate(updated);
     });
   }
 
   async function handleUpdateTitleArtist(songId: string, title: string, artist: string) {
+    const song = songs.find((s) => s.id === songId);
+    if (!song) return;
     await runOrAlertOffline(async () => {
-      const updated = await updateSongTitleArtist(songId, title, artist);
+      const updated = await updateSongTitleArtist(song, title, artist);
       applySongUpdate(updated);
     });
+  }
+
+  async function handleUnlinkField(songId: string, field: 'lyrics' | 'genre') {
+    await runOrAlertOffline(async () => applySongUpdate(await unlinkSongField(songId, field)));
+  }
+
+  async function handleRelinkField(songId: string, field: 'lyrics' | 'genre') {
+    await runOrAlertOffline(async () => applySongUpdate(await relinkSongField(songId, field)));
   }
 
   async function handleUpdateChordChart(songId: string, chordChart: string) {
@@ -887,8 +1049,10 @@ export default function App() {
   }
 
   async function handleDeleteSong(songId: string) {
+    const song = songs.find((s) => s.id === songId);
+    if (!song) return;
     await runOrAlertOffline(async () => {
-      setSongs(await deleteSong(songId));
+      setSongs(await removeSongFromDatabase(song));
       setTagEditorSongId(null);
       handleRemoveFromQueue(songId);
       // The tag editor can be reached from Assessment via "Re-tag this
@@ -1034,16 +1198,69 @@ export default function App() {
     await runOrAlertOffline(async () => setRatingScale(await removeRatingEntry(label)));
   }
 
-  async function handleAddSong(input: {
-    title: string;
-    artist: string;
-    ultimateGuitarUrl: string;
-    chordChart: string;
-    tags: Record<string, TagValue>;
-  }) {
-    await runOrAlertOffline(async () => {
-      setSongs(await addSong(input));
+  // Rejects with DuplicateSongError (so the Add Song screen can show its
+  // confirmation) when the library already has something that looks like it;
+  // any other failure is reported here.
+  async function handleCreateSong(
+    input: {
+      title: string;
+      artist: string;
+      ultimateGuitarUrl: string;
+      chordChart: string;
+      tags: Record<string, TagValue>;
+    },
+    confirmedDifferent: boolean,
+  ) {
+    try {
+      setSongs(await createSong(input, confirmedDifferent));
       goScreen(addSongOrigin);
+    } catch (err) {
+      if (err instanceof DuplicateSongError) throw err;
+      reportFailure(err);
+    }
+  }
+
+  async function handleAddExistingSong(sharedSongId: string): Promise<boolean> {
+    return runOrAlertOffline(async () => {
+      setSongs(await addLibrarySong(sharedSongId));
+    });
+  }
+
+  // Genre values are global, so changing them also has to refresh the list the
+  // Global Settings screen shows (it can be open with no database loaded).
+  async function refreshGenreValues() {
+    setGenreValues(await getGenreValues());
+  }
+
+  async function handleRenameGenre(oldValue: string, newValue: string) {
+    await runOrAlertOffline(async () => {
+      const result = await renameCategoryValue('genre_2', oldValue, newValue);
+      setSongs(result.songs);
+      setCategories(result.categories);
+      await refreshGenreValues();
+    });
+  }
+
+  async function handleDeleteGenre(value: string) {
+    await runOrAlertOffline(async () => {
+      const result = await deleteCategoryValue('genre_2', value);
+      setSongs(result.songs);
+      setCategories(result.categories);
+      await refreshGenreValues();
+    });
+  }
+
+  async function handleAddGenre(value: string) {
+    await runOrAlertOffline(async () => {
+      setCategories(await addCategoryValue('genre_2', value));
+      await refreshGenreValues();
+    });
+  }
+
+  async function handleReorderGenre(orderedValues: string[]) {
+    await runOrAlertOffline(async () => {
+      setCategories(await reorderCategoryValues('genre_2', orderedValues));
+      await refreshGenreValues();
     });
   }
 
@@ -1068,6 +1285,37 @@ export default function App() {
       )}
 
       {screen === 'passphrase' && <PassphraseGate onSubmit={handlePassphraseSubmit} />}
+
+      {screen === 'databases' && (
+        <Databases
+          databases={databases}
+          unlockedIds={new Set(Object.keys(dbKeys))}
+          currentId={database?.id ?? null}
+          canCreate={canEdit}
+          onOpen={handleOpenDatabase}
+          onUnlock={handleUnlockDatabase}
+          onCreate={handleCreateDatabase}
+          onOpenGlobalSettings={() => handleOpenGlobalSettings('databases')}
+          onBack={database ? () => goScreen('results') : null}
+        />
+      )}
+
+      {screen === 'globalSettings' && (
+        <GlobalSettings
+          ratingScale={ratingScale}
+          genreValues={genreValues}
+          songs={songs}
+          canEdit={canEdit}
+          onAddRating={handleAddRating}
+          onUpdateRating={handleUpdateRating}
+          onRemoveRating={handleRemoveRating}
+          onRenameGenre={handleRenameGenre}
+          onDeleteGenre={handleDeleteGenre}
+          onAddGenre={handleAddGenre}
+          onReorderGenre={handleReorderGenre}
+          onBack={() => goScreen(globalSettingsOrigin)}
+        />
+      )}
 
 
       {screen === 'picker' && (
@@ -1109,7 +1357,7 @@ export default function App() {
 
       {screen === 'results' && (
         <Results
-          space={space}
+          ugSearchFallback={database?.ugSearchFallback ?? false}
           songs={visibleSongs}
           totalCount={songs.length}
           ratingScale={ratingScale}
@@ -1124,7 +1372,7 @@ export default function App() {
           onOpenQueue={() => goScreen('queue')}
           onOpenPlaylists={() => goScreen('playlists')}
           onOpenMatrix={() => goScreen('matrix')}
-          onSwitchSpace={handleSwitchSpace}
+          onOpenDatabases={() => goScreen('databases')}
           onOpenAddSong={() => {
             setAddSongOrigin('results');
             goScreen('addsong');
@@ -1145,9 +1393,11 @@ export default function App() {
 
       {screen === 'settings' && (
         <Settings
+          database={database ?? { id: '', name: 'Database', ugSearchFallback: false }}
+          onSwitchDatabase={() => goScreen('databases')}
+          onOpenGlobalSettings={() => handleOpenGlobalSettings('settings')}
           categories={categories}
           songs={songs}
-          ratingScale={ratingScale}
           onBack={() => goScreen('results')}
           onAddCategory={handleAddCategory}
           onRenameCategory={handleRenameCategory}
@@ -1160,17 +1410,12 @@ export default function App() {
           onAddValue={handleAddCategoryValue}
           onReorderValue={handleReorderValues}
           onStartGapFill={startGapFill}
-          onAddRating={handleAddRating}
-          onUpdateRating={handleUpdateRating}
-          onRemoveRating={handleRemoveRating}
           onOpenAddSong={() => {
             setAddSongOrigin('settings');
             goScreen('addsong');
           }}
           scrollSpeeds={scrollSpeeds}
           onChangeScrollSpeeds={handleChangeScrollSpeeds}
-          space={space}
-          onSwitchSpace={handleSwitchSpace}
           leaders={leaders}
           onAddLeader={handleAddLeader}
           onRenameLeader={handleRenameLeader}
@@ -1181,12 +1426,15 @@ export default function App() {
 
       {screen === 'addsong' && (
         <AddSong
-          space={space}
+          database={database ?? { id: '', name: 'this database', ugSearchFallback: false }}
           categories={categories}
           songs={songs}
-          onSave={handleAddSong}
-          onCancel={() => goScreen(addSongOrigin)}
           backLabel={addSongOrigin === 'results' ? 'Back to results' : 'Back to settings'}
+          onCancel={() => goScreen(addSongOrigin)}
+          onSearchLibrary={searchLibrary}
+          onAddExisting={handleAddExistingSong}
+          onFindMatches={findSongMatches}
+          onSave={handleCreateSong}
         />
       )}
 
@@ -1266,7 +1514,7 @@ export default function App() {
 
       {screen === 'assessment' && activeSong && (
         <Assessment
-          space={space}
+          ugSearchFallback={database?.ugSearchFallback ?? false}
           song={activeSong}
           ratingScale={ratingScale}
           onRate={handleRate}
@@ -1317,8 +1565,10 @@ export default function App() {
 
       {tagEditorSong && (
         <SongTagEditor
-          key={tagEditorSong.id}
-          space={space}
+          // Unlinking/relinking lyrics swaps which text the editor shows, so it starts fresh.
+          key={`${tagEditorSong.id}:${tagEditorSong.lyricsUnlinked}`}
+          ugSearchFallback={database?.ugSearchFallback ?? false}
+          ownerName={databases.find((d) => d.id === tagEditorSong.ownerDbId)?.name ?? 'another database'}
           song={tagEditorSong}
           categories={categories}
           allSongs={songs}
@@ -1328,6 +1578,8 @@ export default function App() {
           onUpdateTitleArtist={(title, artist) => handleUpdateTitleArtist(tagEditorSong.id, title, artist)}
           onUpdateUrl={(url) => handleUpdateUrl(tagEditorSong.id, url)}
           onUpdateChordChart={(chordChart) => handleUpdateChordChart(tagEditorSong.id, chordChart)}
+          onUnlinkField={(field) => handleUnlinkField(tagEditorSong.id, field)}
+          onRelinkField={(field) => handleRelinkField(tagEditorSong.id, field)}
           onAddRecording={(title, file) => handleAddRecording(tagEditorSong.id, title, file)}
           onRenameRecording={(recordingId, title) => handleRenameRecording(tagEditorSong.id, recordingId, title)}
           onRemoveRecording={(recordingId) => handleRemoveRecording(tagEditorSong.id, recordingId)}

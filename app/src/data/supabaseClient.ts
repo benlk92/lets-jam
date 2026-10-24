@@ -9,14 +9,32 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 let client: SupabaseClient | null = null;
 
-// RLS on every table requires an x-app-key header matching the passphrase
-// stored in app_config — the anon key alone (shipped in the client bundle)
-// isn't enough. The client can't be created until the passphrase is known,
-// so this is a lazy singleton initialized once the Passphrase Gate resolves,
-// not at module load.
+// The unlocked database's id and password, sent with every request so row
+// security can scope reads and writes to it. Read at request time (not baked
+// into the client) so switching databases never needs a new client.
+let databaseCredentials: { id: string; password: string } | null = null;
+
+export function setDatabaseCredentials(credentials: { id: string; password: string } | null) {
+  databaseCredentials = credentials;
+}
+
+// RLS requires an x-app-key header matching the app passphrase — the anon key
+// alone (shipped in the client bundle) isn't enough. The client can't be
+// created until the passphrase is known, so this is a lazy singleton
+// initialized once the Passphrase Gate resolves, not at module load.
 export function initSupabaseClient(appKey: string): SupabaseClient {
   client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { 'x-app-key': appKey } },
+    global: {
+      headers: { 'x-app-key': appKey },
+      fetch: (input, init) => {
+        const headers = new Headers(init?.headers);
+        if (databaseCredentials) {
+          headers.set('x-db-id', databaseCredentials.id);
+          headers.set('x-db-key', databaseCredentials.password);
+        }
+        return fetch(input, { ...init, headers });
+      },
+    },
   });
   return client;
 }
