@@ -113,11 +113,12 @@ const genreValues = globals.find((g) => g.key === 'genre_values')?.value ?? [];
 const observed = new Set(songs.map((s) => s.tags?.genre_2).filter(Boolean));
 check([...observed].every((g) => genreValues.includes(g)), 'a genre in use is missing from the global list');
 
-// The public API must not be able to read the new tables yet (no policies).
+// Without unlocking a database, the public API must not read per-database tables.
 const appKey = (await admin.from('app_config').select('passphrase').single()).data.passphrase;
 const anon = createClient(url, env.match(/ANON_KEY=(.+)/)?.[1]?.trim() ?? readFileSync(new URL('../app/.env.local', import.meta.url), 'utf8').match(/VITE_SUPABASE_ANON_KEY=(.+)/)[1].trim(),
   { global: { headers: { 'x-app-key': appKey } } });
-for (const table of ['app_databases', 'shared_songs', 'db_songs', 'db_categories', 'db_playlists', 'global_settings']) {
+// (shared_songs, global_settings and database names are readable by design; per-database tables are not.)
+for (const table of ['db_songs', 'db_categories', 'db_playlists', 'db_playlist_songs', 'db_playlist_leaders']) {
   const { data, error } = await anon.from(table).select('*').limit(1);
   check(error !== null || data.length === 0, `anon can read ${table}`);
 }
