@@ -328,7 +328,21 @@ export default function App() {
   // The database the saved queue belongs to — opening a different one clears it.
   const loadLastDbBeforeOpen = useRef<string | null>(loadLastDb());
 
-  async function loadAppData() {
+  // landOn: a database opened read-only starts at the guided picker (a
+  // browse-first view); an unlocked one starts at the full results list.
+  async function loadAppData(landOn: 'results' | 'picker' = 'results') {
+    function showLanding() {
+      if (landOn === 'picker') {
+        setFilters({});
+        setShowStaleness(false);
+        setRandomTenIds(null);
+        setPickerMode('full');
+        setPickerStep(0);
+        setScreen('picker');
+      } else {
+        setScreen('results');
+      }
+    }
     try {
       const [s, c, r, p, l] = await Promise.all([
         getSongs(),
@@ -344,7 +358,7 @@ export default function App() {
       setLeaders(l);
       setIsOffline(false);
       setOfflineUnavailable(false);
-      setScreen('results');
+      showLanding();
       if (pendingWriteCount() > 0) {
         const { remaining } = await syncPendingWrites();
         setPendingCount(remaining);
@@ -361,7 +375,7 @@ export default function App() {
       setCategories(cached.categories);
       setRatingScale(cached.ratingScale);
       setIsOffline(true);
-      setScreen('results');
+      showLanding();
     }
   }
 
@@ -396,7 +410,7 @@ export default function App() {
     }
     loadLastDbBeforeOpen.current = next.id;
     setScreen('loading');
-    await loadAppData();
+    await loadAppData(password === null ? 'picker' : 'results');
   }
 
   // On launch: reopen the database that was open last time — unlocked if this
@@ -426,7 +440,7 @@ export default function App() {
         setCurrentDatabase(last.id);
         setDatabase(last);
         loadLastDbBeforeOpen.current = last.id;
-        await loadAppData();
+        await loadAppData(key === null ? 'picker' : 'results');
       } else {
         setOfflineUnavailable(true);
       }
