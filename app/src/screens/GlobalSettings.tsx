@@ -73,7 +73,7 @@ export default function GlobalSettings({
       </p>
       {!canEdit && (
         <button type="button" className="btn btn-primary" onClick={() => setAskingCode(true)}>
-          🔒 Unlock to edit
+          🔒 Edit
         </button>
       )}
       {askingCode && (

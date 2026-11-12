@@ -209,7 +209,7 @@ export default function Results({
                         onRequestUnlock();
                       }}
                     >
-                      🔒 Unlock to edit
+                      🔒 Edit
                     </button>
                   )}
                 </div>
@@ -248,7 +248,7 @@ export default function Results({
         <div className="readonly-banner">
           <span>Read-only — {databaseName}</span>
           <button type="button" className="btn btn-primary btn-small" onClick={onRequestUnlock}>
-            🔒 Unlock to edit
+            🔒 Edit
           </button>
         </div>
       )}
