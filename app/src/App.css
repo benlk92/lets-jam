@@ -1780,3 +1780,26 @@
   padding-top: 16px;
   border-top: 1px solid var(--border);
 }
+
+.db-card-buttons {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.db-unlocked-badge {
+  font-size: 0.75rem;
+  color: var(--text-muted, #6b6b76);
+}
+
+.readonly-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: var(--surface-muted, rgba(138, 63, 252, 0.08));
+  font-size: 0.9rem;
+}

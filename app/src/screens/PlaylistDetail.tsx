@@ -14,6 +14,7 @@ interface PlaylistDetailProps {
   onAddSong: (songId: string) => void;
   onLoadIntoQueue: () => void;
   onBack: () => void;
+  canEdit: boolean;
 }
 
 const SONG_SEARCH_LIMIT = 20;
@@ -31,6 +32,7 @@ export default function PlaylistDetailScreen({
   onAddSong,
   onLoadIntoQueue,
   onBack,
+  canEdit,
 }: PlaylistDetailProps) {
   const [editingName, setEditingName] = useState(false);
   const [songQuery, setSongQuery] = useState('');
@@ -64,7 +66,7 @@ export default function PlaylistDetailScreen({
         ← Back to playlists
       </button>
 
-      {editingName ? (
+      {canEdit && editingName ? (
         <input
           autoFocus
           className="settings-category-name-input"
@@ -81,9 +83,11 @@ export default function PlaylistDetailScreen({
       ) : (
         <div className="playlist-detail-title-row">
           <h2 className="playlist-detail-name">{playlist.name}</h2>
-          <button type="button" className="btn btn-ghost btn-small" onClick={() => setEditingName(true)}>
-            Rename
-          </button>
+          {canEdit && (
+            <button type="button" className="btn btn-ghost btn-small" onClick={() => setEditingName(true)}>
+              Rename
+            </button>
+          )}
         </div>
       )}
 
@@ -92,22 +96,28 @@ export default function PlaylistDetailScreen({
         <input
           type="date"
           value={playlist.showDate ?? ''}
+          disabled={!canEdit}
           onChange={(e) => onSetDate(e.target.value || null)}
         />
       </label>
 
       <div className="playlist-detail-actions">
-        <button type="button" className="btn btn-ghost btn-small" onClick={onLoadIntoQueue}>
-          Load into Queue
-        </button>
-        <button type="button" className="btn btn-danger btn-small" onClick={handleDelete}>
-          Delete Playlist
-        </button>
+        {canEdit && (
+          <>
+            <button type="button" className="btn btn-ghost btn-small" onClick={onLoadIntoQueue}>
+              Load into Queue
+            </button>
+            <button type="button" className="btn btn-danger btn-small" onClick={handleDelete}>
+              Delete Playlist
+            </button>
+          </>
+        )}
       </div>
 
       <ul className="song-list playlist-song-list">
         {playlist.songs.map((song, index) => (
           <li key={song.songId} className="song-row playlist-song-row">
+            {canEdit && (
             <div className="settings-reorder">
               <button
                 type="button"
@@ -126,10 +136,12 @@ export default function PlaylistDetailScreen({
                 ↓
               </button>
             </div>
+            )}
             <div className="song-row-info">
               <span className="song-title">{song.title}</span>
               <span className="song-artist">{song.artist}</span>
             </div>
+            {canEdit ? (
             <select
               className="playlist-song-leader"
               value={song.leader ?? ''}
@@ -142,6 +154,10 @@ export default function PlaylistDetailScreen({
                 </option>
               ))}
             </select>
+            ) : (
+              song.leader && <span className="song-artist">{song.leader}</span>
+            )}
+            {canEdit && (
             <button
               type="button"
               className="icon-button"
@@ -150,11 +166,13 @@ export default function PlaylistDetailScreen({
             >
               ×
             </button>
+            )}
           </li>
         ))}
         {playlist.songs.length === 0 && <li className="song-list-empty">No songs in this playlist yet.</li>}
       </ul>
 
+      {canEdit && (
       <section className="settings-section">
         <h2>Add a Song</h2>
         <input
@@ -189,6 +207,7 @@ export default function PlaylistDetailScreen({
           </div>
         )}
       </section>
+      )}
     </div>
   );
 }

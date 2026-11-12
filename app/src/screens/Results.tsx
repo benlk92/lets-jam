@@ -48,6 +48,8 @@ interface ResultsProps {
   playlists: PlaylistSummary[];
   onAddSongToPlaylist: (playlistId: string, song: Song) => void;
   canEdit: boolean;
+  databaseName: string;
+  onRequestUnlock: () => void;
   isRandomTen: boolean;
   search: string;
   onSearchChange: (value: string) => void;
@@ -86,6 +88,8 @@ export default function Results({
   playlists,
   onAddSongToPlaylist,
   canEdit,
+  databaseName,
+  onRequestUnlock,
   isRandomTen,
   search,
   onSearchChange,
@@ -128,7 +132,7 @@ export default function Results({
               Find More Songs
             </button>
           </div>
-          {canEdit && (
+          {(
             <div className="hamburger-wrap" ref={hamburgerRef}>
               <button
                 type="button"
@@ -150,26 +154,30 @@ export default function Results({
                   >
                     Switch database
                   </button>
-                  <button
-                    type="button"
-                    className="dropdown-menu-item"
-                    onClick={() => {
-                      setShowMenu(false);
-                      onOpenSettings();
-                    }}
-                  >
-                    Settings
-                  </button>
-                  <button
-                    type="button"
-                    className="dropdown-menu-item"
-                    onClick={() => {
-                      setShowMenu(false);
-                      onOpenQueue();
-                    }}
-                  >
-                    Song Queue{queue.length > 0 ? ` (${queue.length})` : ''}
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setShowMenu(false);
+                        onOpenSettings();
+                      }}
+                    >
+                      Settings
+                    </button>
+                  )}
+                  {canEdit && (
+                    <button
+                      type="button"
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setShowMenu(false);
+                        onOpenQueue();
+                      }}
+                    >
+                      Song Queue{queue.length > 0 ? ` (${queue.length})` : ''}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="dropdown-menu-item"
@@ -180,16 +188,30 @@ export default function Results({
                   >
                     Playlists{playlists.length > 0 ? ` (${playlists.length})` : ''}
                   </button>
-                  <button
-                    type="button"
-                    className="dropdown-menu-item"
-                    onClick={() => {
-                      setShowMenu(false);
-                      onOpenMatrix();
-                    }}
-                  >
-                    Matrix
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setShowMenu(false);
+                        onOpenMatrix();
+                      }}
+                    >
+                      Matrix
+                    </button>
+                  )}
+                  {!canEdit && (
+                    <button
+                      type="button"
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setShowMenu(false);
+                        onRequestUnlock();
+                      }}
+                    >
+                      🔒 Unlock to edit
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -221,6 +243,15 @@ export default function Results({
           />
         </div>
       </div>
+
+      {!canEdit && (
+        <div className="readonly-banner">
+          <span>Read-only — {databaseName}</span>
+          <button type="button" className="btn btn-primary btn-small" onClick={onRequestUnlock}>
+            🔒 Unlock to edit
+          </button>
+        </div>
+      )}
 
       {activeFilterLabels.length > 0 && (
         <button type="button" className="active-filters" onClick={onOpenFilters}>

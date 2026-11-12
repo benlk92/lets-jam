@@ -24,7 +24,7 @@ import {
   deleteCategoryValue,
   DuplicateSongError,
   findSongMatches,
-  getAppKeyRole,
+  checkAdminCode,
   getGenreValues,
   listDatabases,
   relinkSongField,
@@ -79,10 +79,10 @@ import {
   reorderPlaylistLeaders,
 } from './data/store';
 import { isNetworkError } from './data/offlineCache';
-import { initSupabaseClient, setDatabaseCredentials } from './data/supabaseClient';
+import { setAdminKey, setDatabaseCredentials } from './data/supabaseClient';
 import { filterSongs, GENRE_CATEGORY_ID, shuffledSample, sortSongs } from './lib/filtering';
 import { buildGapFillQueue, gapFillAt, gapFillTotal, type GapFillMode, type GapFillQueue } from './lib/gapfill';
-import PassphraseGate from './screens/PassphraseGate';
+import PasswordDialog from './screens/PasswordDialog';
 import GuidedPicker from './screens/GuidedPicker';
 import ScatterPicker from './screens/ScatterPicker';
 import PickerChooser from './screens/PickerChooser';
@@ -108,7 +108,6 @@ import './App.css';
 
 type Screen =
   | 'loading'
-  | 'passphrase'
   | 'databases'
   | 'globalSettings'
   | 'picker'
@@ -141,32 +140,25 @@ const DEFAULT_SORT_CRITERIA: SortCriterion[] = [
   { key: 'artist', direction: 'asc' },
 ];
 
-// RLS enforces this server-side (see the migration) — this is just the
-// client-side "don't ask again for a while" convenience the brief calls for.
-const PASSPHRASE_KEY = 'songapp:passphrase';
-const PASSPHRASE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+// The global admin code (edits the rating scale and genre values) is
+// remembered on this device like a database password. RLS enforces both
+// server-side; this is only the "don't ask again" convenience.
+const ADMIN_KEY_KEY = 'songapp:adminKey:v1';
 
-type Role = 'admin' | 'viewer';
-
-function loadStoredPassphrase(): { value: string; role: Role } | null {
+function loadAdminKey(): string | null {
   try {
-    const raw = localStorage.getItem(PASSPHRASE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { value: string; setAt: number; role?: Role };
-    if (Date.now() - parsed.setAt > PASSPHRASE_TTL_MS) return null;
-    // Older stored sessions (before roles existed) never wrote a role —
-    // they were only ever the admin key, since viewer keys didn't exist yet.
-    return { value: parsed.value, role: parsed.role ?? 'admin' };
+    return localStorage.getItem(ADMIN_KEY_KEY);
   } catch {
     return null;
   }
 }
 
-function storePassphrase(value: string, role: Role) {
+function saveAdminKey(code: string | null) {
   try {
-    localStorage.setItem(PASSPHRASE_KEY, JSON.stringify({ value, role, setAt: Date.now() }));
+    if (code) localStorage.setItem(ADMIN_KEY_KEY, code);
+    else localStorage.removeItem(ADMIN_KEY_KEY);
   } catch {
-    // localStorage unavailable — the gate just shows again next load
+    // localStorage unavailable — the code is asked for again next time
   }
 }
 
@@ -322,9 +314,11 @@ export default function App() {
   const [offlineUnavailable, setOfflineUnavailable] = useState(false);
   const [pendingCount, setPendingCount] = useState(pendingWriteCount);
 
-  const [initialPassphrase] = useState(loadStoredPassphrase);
-  const [role, setRole] = useState<Role>(initialPassphrase?.role ?? 'admin');
-  const canEdit = role === 'admin';
+  // A database opens read-only for everyone; entering its password unlocks
+  // editing. The admin code separately unlocks the global settings.
+  const [canEdit, setCanEdit] = useState(false);
+  const [adminCode, setAdminCode] = useState<string | null>(loadAdminKey);
+  const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
 
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [database, setDatabase] = useState<DatabaseInfo | null>(null);
@@ -374,9 +368,10 @@ export default function App() {
   // Opening a database scopes everything the app reads or writes to it: the
   // requests carry its password, and anything tied to the database we're
   // leaving (queue, filters, playlists) is dropped.
-  async function openDatabase(next: DatabaseInfo, password: string) {
+  async function openDatabase(next: DatabaseInfo, password: string | null) {
     const switching = database?.id !== next.id;
-    setDatabaseCredentials({ id: next.id, password });
+    setDatabaseCredentials(password ? { id: next.id, password } : null);
+    setCanEdit(password !== null);
     setCurrentDatabase(next.id);
     setDatabase(next);
     saveLastDb(next.id);
@@ -404,30 +399,30 @@ export default function App() {
     await loadAppData();
   }
 
-  // After the app passphrase is accepted: go straight to the database that was
-  // open last time if this device still has its password, else the picker.
+  // On launch: reopen the database that was open last time — unlocked if this
+  // device still has its password, read-only if not — or show the picker.
   async function enterApp() {
     try {
       const list = await listDatabases();
       setDatabases(list);
       saveDbList(list);
-      const lastId = loadLastDb();
-      const last = list.find((d) => d.id === lastId);
-      const key = last ? loadDbKeys()[last.id] : undefined;
-      if (last && key && (await unlockDatabase(last.id, key))) {
-        await openDatabase(last, key);
+      const last = list.find((d) => d.id === loadLastDb());
+      if (!last) {
+        setScreen('databases');
         return;
       }
-      setScreen('databases');
+      const key = loadDbKeys()[last.id];
+      await openDatabase(last, key && (await unlockDatabase(last.id, key)) ? key : null);
     } catch (err) {
       if (!isNetworkError(err)) throw err;
       // No connection: reopen the last database from its saved copy, if any.
       const list = loadDbList();
       setDatabases(list);
       const last = list.find((d) => d.id === loadLastDb());
-      const key = last ? loadDbKeys()[last.id] : undefined;
-      if (last && key) {
-        setDatabaseCredentials({ id: last.id, password: key });
+      if (last) {
+        const key = loadDbKeys()[last.id] ?? null;
+        setDatabaseCredentials(key ? { id: last.id, password: key } : null);
+        setCanEdit(key !== null);
         setCurrentDatabase(last.id);
         setDatabase(last);
         loadLastDbBeforeOpen.current = last.id;
@@ -439,35 +434,11 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (initialPassphrase) {
-      initSupabaseClient(initialPassphrase.value);
-      enterApp();
-    } else {
-      setScreen('passphrase');
-    }
+    setAdminKey(adminCode);
+    enterApp();
+    // Runs once on launch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPassphrase]);
-
-  // A wrong passphrase isn't rejected with an error — RLS just shows nothing —
-  // so "did this work" is judged by asking the database which role the key
-  // is. This check must stay network-only (no cache fallback) — otherwise
-  // typing any string while genuinely offline would appear to succeed.
-  async function handlePassphraseSubmit(passphrase: string): Promise<string | null> {
-    initSupabaseClient(passphrase);
-    let resolvedRole: Role;
-    try {
-      const role = await getAppKeyRole();
-      if (!role) return "That passphrase didn't work — try again.";
-      resolvedRole = role;
-    } catch (err) {
-      if (isNetworkError(err)) return "Can't verify right now — check your connection and try again.";
-      return "That passphrase didn't work — try again.";
-    }
-    storePassphrase(passphrase, resolvedRole);
-    setRole(resolvedRole);
-    await enterApp();
-    return null;
-  }
+  }, []);
 
   // Resolves to an error message, or null once the database is open.
   async function handleUnlockDatabase(target: DatabaseInfo, password: string): Promise<string | null> {
@@ -484,18 +455,22 @@ export default function App() {
     return null;
   }
 
-  // A saved password can go stale (changed on the server) — confirm it still
-  // works before opening, and fall back to asking again if it doesn't.
+  // Opens a database: editable if this device has its password and the server
+  // still accepts it, read-only otherwise. A stale saved password is dropped.
   async function handleOpenDatabase(target: DatabaseInfo) {
     const password = dbKeys[target.id];
-    if (!password) return;
+    if (!password) {
+      await openDatabase(target, null);
+      return;
+    }
     try {
       if (!(await unlockDatabase(target.id, password))) {
         const keys = { ...dbKeys };
         delete keys[target.id];
         setDbKeys(keys);
         saveDbKeys(keys);
-        window.alert(`The password for ${target.name} has changed — please unlock it again.`);
+        window.alert(`The password for ${target.name} has changed — opening it read-only. Unlock it again to edit.`);
+        await openDatabase(target, null);
         return;
       }
     } catch (err) {
@@ -505,9 +480,46 @@ export default function App() {
     await openDatabase(target, password);
   }
 
-  async function handleCreateDatabase(name: string, password: string, ugSearchFallback: boolean): Promise<string | null> {
+  // "Unlock to edit" on the database that's already open.
+  async function handleUnlockCurrent(password: string): Promise<string | null> {
+    if (!database) return 'No database is open.';
     try {
-      const id = await createDatabase(name, password, ugSearchFallback);
+      if (!(await unlockDatabase(database.id, password))) return "That password didn't work — try again.";
+    } catch (err) {
+      if (isNetworkError(err)) return "Can't verify right now — check your connection and try again.";
+      return "That password didn't work — try again.";
+    }
+    const keys = { ...dbKeys, [database.id]: password };
+    setDbKeys(keys);
+    saveDbKeys(keys);
+    setDatabaseCredentials({ id: database.id, password });
+    setCanEdit(true);
+    setShowUnlockPrompt(false);
+    return null;
+  }
+
+  // Global settings: check the admin code with the server before keeping it.
+  async function handleUnlockAdmin(code: string): Promise<string | null> {
+    try {
+      if (!(await checkAdminCode(code))) return "That passphrase didn't work — try again.";
+    } catch (err) {
+      if (isNetworkError(err)) return "Can't verify right now — check your connection and try again.";
+      return "That passphrase didn't work — try again.";
+    }
+    setAdminKey(code);
+    saveAdminKey(code);
+    setAdminCode(code);
+    return null;
+  }
+
+  async function handleCreateDatabase(
+    name: string,
+    password: string,
+    createCode: string,
+    ugSearchFallback: boolean,
+  ): Promise<string | null> {
+    try {
+      const id = await createDatabase(name, password, createCode, ugSearchFallback);
       const list = await listDatabases();
       setDatabases(list);
       saveDbList(list);
@@ -880,6 +892,7 @@ export default function App() {
   // or the Song Queue list. Only reachable in admin contexts (those entry
   // points are all canEdit-gated in the UI).
   function handleSelectSong(song: Song, origin: AssessmentOrigin = 'results') {
+    if (!canEdit) return;
     setActiveSongId(song.id);
     setActiveSongOrigin(origin);
     goScreen('assessment');
@@ -1284,14 +1297,11 @@ export default function App() {
         </div>
       )}
 
-      {screen === 'passphrase' && <PassphraseGate onSubmit={handlePassphraseSubmit} />}
-
       {screen === 'databases' && (
         <Databases
           databases={databases}
           unlockedIds={new Set(Object.keys(dbKeys))}
           currentId={database?.id ?? null}
-          canCreate={canEdit}
           onOpen={handleOpenDatabase}
           onUnlock={handleUnlockDatabase}
           onCreate={handleCreateDatabase}
@@ -1305,7 +1315,8 @@ export default function App() {
           ratingScale={ratingScale}
           genreValues={genreValues}
           songs={songs}
-          canEdit={canEdit}
+          canEdit={adminCode !== null}
+          onUnlockAdmin={handleUnlockAdmin}
           onAddRating={handleAddRating}
           onUpdateRating={handleUpdateRating}
           onRemoveRating={handleRemoveRating}
@@ -1388,6 +1399,8 @@ export default function App() {
           isRandomTen={randomTenIds !== null}
           search={search}
           onSearchChange={setSearch}
+          databaseName={database?.name ?? ''}
+          onRequestUnlock={() => setShowUnlockPrompt(true)}
         />
       )}
 
@@ -1476,6 +1489,7 @@ export default function App() {
           onRemoveSong={handleRemoveSongFromPlaylist}
           onAddSong={handleAddSongToPlaylistDetail}
           onLoadIntoQueue={handleLoadPlaylistIntoQueue}
+          canEdit={canEdit}
           onBack={() => goScreen('playlists')}
         />
       )}
@@ -1560,6 +1574,16 @@ export default function App() {
           criteria={sortCriteria}
           onChange={setSortCriteria}
           onClose={() => setShowSort(false)}
+        />
+      )}
+
+      {showUnlockPrompt && database && (
+        <PasswordDialog
+          title={`Unlock ${database.name}`}
+          subtitle="Enter this database's password to edit it."
+          placeholder={`Password for ${database.name}`}
+          onSubmit={handleUnlockCurrent}
+          onCancel={() => setShowUnlockPrompt(false)}
         />
       )}
 

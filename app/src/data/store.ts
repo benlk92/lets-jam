@@ -166,13 +166,12 @@ export function loadCachedSnapshot() {
   return loadSnapshot(currentDb);
 }
 
-// Both the admin and viewer app passphrase pass RLS reads, and a wrong one
-// isn't rejected with an error (RLS just filters rows to nothing) — this asks
-// the database directly which one the current key is, or null if neither.
-export async function getAppKeyRole(): Promise<'admin' | 'viewer' | null> {
-  const { data, error } = await getSupabaseClient().rpc('app_key_role');
+// Asks the database whether this is the global admin code — a wrong code
+// isn't rejected on its own (writes just fail), so it's checked before it's kept.
+export async function checkAdminCode(code: string): Promise<boolean> {
+  const { data, error } = await getSupabaseClient().rpc('check_admin_code', { p_code: code });
   if (error) throw error;
-  return data as 'admin' | 'viewer' | null;
+  return data === true;
 }
 
 // --- Databases ---
@@ -199,13 +198,20 @@ export async function unlockDatabase(databaseId: string, password: string): Prom
   return data === true;
 }
 
-export async function createDatabase(name: string, password: string, ugSearchFallback: boolean): Promise<string> {
+export async function createDatabase(
+  name: string,
+  password: string,
+  createCode: string,
+  ugSearchFallback: boolean,
+): Promise<string> {
   const { data, error } = await getSupabaseClient().rpc('create_database', {
     p_name: name,
     p_password: password,
+    p_create_code: createCode,
     p_ug_search: ugSearchFallback,
   });
   if (error) {
+    if (error.message === 'NOT_ALLOWED') throw new Error("That create code isn't right.");
     if (error.message === 'NAME_TAKEN') throw new Error('A database with that name already exists.');
     if (error.message === 'NAME_AND_PASSWORD_REQUIRED') throw new Error('A name and a password are both required.');
     throw error;

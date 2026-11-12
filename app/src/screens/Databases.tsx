@@ -6,12 +6,11 @@ interface DatabasesProps {
   // Databases whose password this device already knows — one tap to open.
   unlockedIds: Set<string>;
   currentId: string | null;
-  canCreate: boolean;
   onOpen: (database: DatabaseInfo) => void;
   // Resolves to an error message, or null once the database is unlocked (the
   // caller opens it).
   onUnlock: (database: DatabaseInfo, password: string) => Promise<string | null>;
-  onCreate: (name: string, password: string, ugSearchFallback: boolean) => Promise<string | null>;
+  onCreate: (name: string, password: string, createCode: string, ugSearchFallback: boolean) => Promise<string | null>;
   onOpenGlobalSettings: () => void;
   onBack: (() => void) | null;
 }
@@ -66,7 +65,6 @@ export default function Databases({
   databases,
   unlockedIds,
   currentId,
-  canCreate,
   onOpen,
   onUnlock,
   onCreate,
@@ -77,16 +75,17 @@ export default function Databases({
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [createCode, setCreateCode] = useState('');
   const [ugSearch, setUgSearch] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !password || creating) return;
+    if (!name.trim() || !password || !createCode || creating) return;
     setCreating(true);
     setCreateError(null);
-    const message = await onCreate(name.trim(), password, ugSearch);
+    const message = await onCreate(name.trim(), password, createCode, ugSearch);
     setCreating(false);
     if (message) setCreateError(message);
   }
@@ -100,7 +99,7 @@ export default function Databases({
       )}
 
       <h1>Let's Jam 🎸</h1>
-      <p className="modal-subtitle">Pick a database. Each one has its own password.</p>
+      <p className="modal-subtitle">Pick a database to browse it. Changing anything in one needs its password.</p>
 
       <ul className="song-list">
         {databases.map((database) => {
@@ -111,20 +110,22 @@ export default function Databases({
                 <div className="db-card-name">
                   <span className="song-title">{database.name}</span>
                   {database.id === currentId && <span className="queued-badge">Open now</span>}
+                  {unlocked && <span className="db-unlocked-badge">Unlocked</span>}
                 </div>
-                {unlocked ? (
+                <div className="db-card-buttons">
                   <button type="button" className="btn btn-primary btn-small" onClick={() => onOpen(database)}>
                     Open
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-small"
-                    onClick={() => setUnlockingId(unlockingId === database.id ? null : database.id)}
-                  >
-                    🔒 Unlock
-                  </button>
-                )}
+                  {!unlocked && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-small"
+                      onClick={() => setUnlockingId(unlockingId === database.id ? null : database.id)}
+                    >
+                      🔒 Unlock
+                    </button>
+                  )}
+                </div>
               </div>
               {unlockingId === database.id && !unlocked && (
                 <UnlockForm database={database} onUnlock={onUnlock} onCancel={() => setUnlockingId(null)} />
@@ -135,7 +136,7 @@ export default function Databases({
         {databases.length === 0 && <li className="song-list-empty">No databases yet.</li>}
       </ul>
 
-      {canCreate && (
+      {(
         <section className="settings-section">
           {showCreate ? (
             <form className="db-create-form" onSubmit={handleCreate}>
@@ -154,6 +155,13 @@ export default function Databases({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <input
+                type="password"
+                className="settings-add-name"
+                placeholder="Create code"
+                value={createCode}
+                onChange={(e) => setCreateCode(e.target.value)}
+              />
               <label className="settings-toggle">
                 <input type="checkbox" checked={ugSearch} onChange={(e) => setUgSearch(e.target.checked)} />
                 Songs here mostly come from Ultimate Guitar
@@ -162,7 +170,7 @@ export default function Databases({
                 A new database starts empty. Add songs, or bring in existing ones from the shared library.
               </p>
               <div className="db-unlock-actions">
-                <button type="submit" className="btn btn-primary" disabled={creating || !name.trim() || !password}>
+                <button type="submit" className="btn btn-primary" disabled={creating || !name.trim() || !password || !createCode}>
                   {creating ? 'Creating…' : 'Create'}
                 </button>
                 <button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>

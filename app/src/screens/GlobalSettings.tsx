@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Category, RatingScaleEntry, Song } from '../types';
 import { GENRE_CATEGORY_ID } from '../lib/filtering';
 import ManageValues from './ManageValues';
+import PasswordDialog from './PasswordDialog';
 
 interface GlobalSettingsProps {
   ratingScale: RatingScaleEntry[];
@@ -10,6 +11,8 @@ interface GlobalSettingsProps {
   // genre value affects there.
   songs: Song[];
   canEdit: boolean;
+  // Resolves to an error message, or null once the admin code is accepted.
+  onUnlockAdmin: (code: string) => Promise<string | null>;
   onAddRating: (label: string, intervalDays: number) => void;
   onUpdateRating: (oldLabel: string, next: RatingScaleEntry) => void;
   onRemoveRating: (label: string) => void;
@@ -25,6 +28,7 @@ export default function GlobalSettings({
   genreValues,
   songs,
   canEdit,
+  onUnlockAdmin,
   onAddRating,
   onUpdateRating,
   onRemoveRating,
@@ -37,6 +41,7 @@ export default function GlobalSettings({
   const [newRatingLabel, setNewRatingLabel] = useState('');
   const [newRatingInterval, setNewRatingInterval] = useState('');
   const [showGenreValues, setShowGenreValues] = useState(false);
+  const [askingCode, setAskingCode] = useState(false);
 
   const genreCategory: Category = { id: GENRE_CATEGORY_ID, name: 'Genre', values: genreValues };
 
@@ -64,8 +69,26 @@ export default function GlobalSettings({
 
       <h1>Global settings</h1>
       <p className="modal-subtitle">
-        These apply to every database.{canEdit ? '' : ' You have read-only access, so they can be viewed but not changed.'}
+        These apply to every database.{canEdit ? '' : ' Viewing only — enter the admin passphrase to change them.'}
       </p>
+      {!canEdit && (
+        <button type="button" className="btn btn-primary" onClick={() => setAskingCode(true)}>
+          🔒 Unlock to edit
+        </button>
+      )}
+      {askingCode && (
+        <PasswordDialog
+          title="Edit global settings"
+          subtitle="Enter the admin passphrase."
+          placeholder="Admin passphrase"
+          onSubmit={async (code) => {
+            const message = await onUnlockAdmin(code);
+            if (!message) setAskingCode(false);
+            return message;
+          }}
+          onCancel={() => setAskingCode(false)}
+        />
+      )}
 
       <section className="settings-section">
         <h2>Rating Scale</h2>

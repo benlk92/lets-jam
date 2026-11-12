@@ -18,28 +18,34 @@ export function setDatabaseCredentials(credentials: { id: string; password: stri
   databaseCredentials = credentials;
 }
 
-// RLS requires an x-app-key header matching the app passphrase — the anon key
-// alone (shipped in the client bundle) isn't enough. The client can't be
-// created until the passphrase is known, so this is a lazy singleton
-// initialized once the Passphrase Gate resolves, not at module load.
-export function initSupabaseClient(appKey: string): SupabaseClient {
-  client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+// The global admin code, sent as x-admin-key so row security lets the rating
+// scale and genre values be edited. Read at request time like the database
+// credentials above.
+let adminKey: string | null = null;
+
+export function setAdminKey(key: string | null) {
+  adminKey = key;
+}
+
+// Anyone can read; writes are checked server-side against the unlocked
+// database's password (x-db-id / x-db-key) or the admin code (x-admin-key).
+function createSupabaseClient(): SupabaseClient {
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: {
-      headers: { 'x-app-key': appKey },
       fetch: (input, init) => {
         const headers = new Headers(init?.headers);
         if (databaseCredentials) {
           headers.set('x-db-id', databaseCredentials.id);
           headers.set('x-db-key', databaseCredentials.password);
         }
+        if (adminKey) headers.set('x-admin-key', adminKey);
         return fetch(input, { ...init, headers });
       },
     },
   });
-  return client;
 }
 
 export function getSupabaseClient(): SupabaseClient {
-  if (!client) throw new Error('Supabase client not initialized — call initSupabaseClient() first');
+  if (!client) client = createSupabaseClient();
   return client;
 }

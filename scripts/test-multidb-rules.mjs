@@ -1,7 +1,8 @@
 // Exercises the multi-database access rules and functions through the same
 // public API the app uses (anon key + headers), using throwaway "ZZ" databases
 // that are deleted at the end. Never edits Pop Songs or Circle Songs rows.
-// Usage (from scripts/):  node test-multidb-rules.mjs
+// The two access codes are not stored anywhere, so pass them in:
+// Usage (from scripts/):  CREATE_CODE=... ADMIN_CODE=... node test-multidb-rules.mjs
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 
@@ -12,9 +13,20 @@ const anonKey = readFileSync(new URL('../app/.env.local', import.meta.url), 'utf
 const admin = createClient(url, serviceKey);
 const config = (await admin.from('app_config').select('*').single()).data;
 
-const as = (appKey, db) =>
+const CREATE_CODE = process.env.CREATE_CODE;
+const ADMIN_CODE = process.env.ADMIN_CODE;
+if (!CREATE_CODE || !ADMIN_CODE) throw new Error('Set CREATE_CODE and ADMIN_CODE (see the header of this file).');
+
+// A client the way the app builds one: anon key only, plus optional headers for
+// the unlocked database and the admin code. No app passphrase any more.
+const as = (db, adminKey) =>
   createClient(url, anonKey, {
-    global: { headers: { 'x-app-key': appKey, ...(db ? { 'x-db-id': db.id, 'x-db-key': db.password } : {}) } },
+    global: {
+      headers: {
+        ...(db ? { 'x-db-id': db.id, 'x-db-key': db.password } : {}),
+        ...(adminKey ? { 'x-admin-key': adminKey } : {}),
+      },
+    },
   });
 
 let failures = 0;
@@ -32,39 +44,68 @@ const circle = { id: legacyDbs.find((d) => d.name === 'Circle Songs').id, passwo
 
 const createdDbs = [];
 try {
-  // ── reading ──
-  console.log('reading & isolation');
-  const noDb = as(config.passphrase);
-  ok((await noDb.from('db_songs').select('id').limit(1)).data.length === 0, 'no database unlocked sees no entries');
-  ok((await noDb.from('shared_songs').select('id', { count: 'exact', head: true })).count > 600, 'shared library is readable without a database');
-  ok((await noDb.from('app_databases').select('id,name')).data.length >= 2, 'database names are listable');
-  ok(!!(await errorOf(noDb.from('app_databases').select('password_hash'))), 'password hash is not selectable');
-  ok(!!(await errorOf(noDb.from('app_databases').select('*'))), 'select * on databases is refused (hash column)');
+  // ── reading: open to everyone; writing needs the database password ──
+  console.log('open reads, locked writes');
+  const anon = as();
+  ok((await anon.from('db_songs').select('id', { count: 'exact', head: true })).count > 600, 'anyone can read database entries without a password');
+  ok((await anon.from('shared_songs').select('id', { count: 'exact', head: true })).count > 600, 'the shared library is readable');
+  ok((await anon.from('app_databases').select('id,name')).data.length >= 2, 'database names are listable');
+  ok((await anon.from('db_playlists').select('id', { count: 'exact', head: true })).count >= 6, 'playlists are readable');
+  ok((await anon.from('db_playlist_songs').select('playlist_id', { count: 'exact', head: true })).count > 50, 'playlist songs are readable');
+  ok((await anon.from('db_categories').select('id', { count: 'exact', head: true })).count > 10, 'categories are readable');
+  ok((await anon.from('global_settings').select('key')).data.length >= 1, 'global settings are readable');
+  ok((await anon.from('rating_scale').select('label')).data.length >= 4, 'the rating scale is readable');
+  ok(!!(await errorOf(anon.from('app_databases').select('password_hash'))), 'password hash is not selectable');
+  ok(!!(await errorOf(anon.from('app_databases').select('*'))), 'select * on databases is refused (hash column)');
+  ok(!!(await errorOf(anon.from('access_codes').select('*'))), 'access codes are not readable');
+  ok(!!(await errorOf(anon.rpc('set_access_code', { p_kind: 'global_admin', p_code: 'x' }))), 'set_access_code is not callable from the app');
+  const audioList = await anon.storage.from('audio').list('', { limit: 5 });
+  ok(!audioList.error && audioList.data.length > 0, 'recordings are listable without a password');
+  const oneAudio = (await admin.storage.from('audio').list((await admin.storage.from('audio').list('', { limit: 1 })).data[0].name, { limit: 1 })).data[0];
+  const audioFolder = (await admin.storage.from('audio').list('', { limit: 1 })).data[0].name;
+  ok(!(await anon.storage.from('audio').download(`${audioFolder}/${oneAudio.name}`)).error, 'recordings can be downloaded without a password');
 
-  const popClient = as(config.passphrase, pop);
-  const popCount = (await popClient.from('db_songs').select('id', { count: 'exact', head: true })).count;
-  ok(popCount >= 600, `Pop sees its own songs (${popCount})`);
-  ok((await popClient.from('db_songs').select('id').eq('db_id', circle.id).limit(1)).data.length === 0, 'Pop cannot read Circle entries');
-  ok((await popClient.from('db_categories').select('id').eq('db_id', circle.id)).data.length === 0, 'Pop cannot read Circle categories');
-  ok((await popClient.from('db_playlists').select('id').eq('db_id', circle.id)).data.length === 0, 'Pop cannot read Circle playlists');
-  ok((await as(config.passphrase, { ...pop, password: 'wrong' }).from('db_songs').select('id').limit(1)).data.length === 0, 'wrong database password sees nothing');
-  ok((await as(config.passphrase, { id: circle.id, password: 'wrong' }).from('db_songs').select('id').limit(1)).data.length === 0, 'wrong password for Circle sees nothing');
-  ok((await noDb.rpc('unlock_database', { p_db: pop.id, p_password: config.passphrase })).data === true, 'unlock_database accepts the right password');
-  ok((await noDb.rpc('unlock_database', { p_db: pop.id, p_password: 'nope' })).data === false, 'unlock_database rejects a wrong one');
-  ok((await as('not-the-app-key').rpc('unlock_database', { p_db: pop.id, p_password: config.passphrase })).data !== true, 'unlock needs the app password too');
+  // every write is refused with no password, a wrong one, or another database's
+  const popRow = (await admin.from('db_songs').select('id,tags,db_id').eq('db_id', pop.id).limit(1)).data[0];
+  const wrongPop = as({ ...pop, password: 'wrong' });
+  for (const [label, client] of [['no password', anon], ['a wrong password', wrongPop]]) {
+    const upd = await client.from('db_songs').update({ memorized: true }).eq('id', popRow.id).select();
+    ok(!upd.error && upd.data.length === 0, `an entry cannot be changed with ${label}`);
+    ok(!!(await errorOf(client.from('db_songs').insert({ db_id: pop.id, shared_song_id: (await admin.from('shared_songs').select('id').limit(1)).data[0].id }))), `an entry cannot be added with ${label}`);
+    ok(!!(await errorOf(client.from('db_categories').insert({ id: 'zz_nope', db_id: pop.id, name: 'x', type: 'single', sort_order: 99 }))), `a category cannot be added with ${label}`);
+    ok(!!(await errorOf(client.from('db_playlists').insert({ db_id: pop.id, name: 'ZZ nope' }))), `a playlist cannot be added with ${label}`);
+    const del = await client.from('db_playlists').delete().eq('db_id', pop.id).select();
+    ok(!del.error && del.data.length === 0, `playlists cannot be deleted with ${label}`);
+    ok(!!(await errorOf(client.rpc('rate_db_song', { p_song_id: popRow.id, p_rating_label: 'Good' }))), `a song cannot be rated with ${label}`);
+    ok(!!(await errorOf(client.rpc('remove_db_song', { p_song_id: popRow.id }))), `a song cannot be removed with ${label}`);
+    ok(!!(await errorOf(client.storage.from('audio').upload(`${popRow.id}/zz-test`, new Blob(['x'])))), `a recording cannot be uploaded with ${label}`);
+  }
+  ok((await anon.rpc('unlock_database', { p_db: pop.id, p_password: config.passphrase })).data === true, 'unlock_database accepts the right password');
+  ok((await anon.rpc('unlock_database', { p_db: pop.id, p_password: 'nope' })).data === false, 'unlock_database rejects a wrong one');
+  const popClient = as(pop);
+  ok((await popClient.from('db_songs').select('id', { count: 'exact', head: true })).count > 600, 'the unlocked database still reads fine');
 
-  // viewer: read-only everywhere
-  const viewer = as(config.viewer_passphrase, pop);
-  ok((await viewer.from('db_songs').select('id').limit(1)).data.length === 1, 'viewer can read inside an unlocked database');
-  ok(!!(await errorOf(viewer.from('db_categories').insert({ id: 'zz_viewer', db_id: pop.id, name: 'x', type: 'single', sort_order: 99 }))), 'viewer cannot write');
-  ok(!!(await errorOf(viewer.rpc('create_database', { p_name: 'ZZ Viewer', p_password: 'x' }))), 'viewer cannot create a database');
-  ok(!!(await errorOf(viewer.rpc('rename_genre_value', { p_old: 'ZZ', p_new: 'ZZ2' }))), 'viewer cannot edit global genre values');
+  // global settings: the admin code only
+  ok(!!(await errorOf(anon.rpc('rename_genre_value', { p_old: 'ZZ', p_new: 'ZZ2' }))), 'no code cannot edit global genre values');
+  ok(!!(await errorOf(popClient.rpc('rename_genre_value', { p_old: 'ZZ', p_new: 'ZZ2' }))), 'a database password cannot edit global genre values');
+  ok(!!(await errorOf(as(null, 'wrong').rpc('rename_rating_label', { p_old: 'ZZ', p_new: 'ZZ2' }))), 'a wrong admin code cannot rename a rating label');
+  ok(!!(await errorOf(anon.from('rating_scale').insert({ label: 'ZZ nope', interval_days: 1, sort_order: 99 }))), 'no code cannot add a rating');
+  const gUpd = await popClient.from('global_settings').update({ value: [] }).eq('key', 'genre_values').select();
+  ok(!gUpd.error && gUpd.data.length === 0, 'a database password cannot change global settings');
+  ok((await anon.rpc('check_admin_code', { p_code: ADMIN_CODE })).data === true, 'check_admin_code accepts the admin code');
+  ok((await anon.rpc('check_admin_code', { p_code: 'nope' })).data === false, 'check_admin_code rejects a wrong one');
+  ok((await anon.rpc('check_admin_code', { p_code: CREATE_CODE })).data === false, 'the create code is not the admin code');
+
+  // creating a database needs the create code
+  ok((await errorOf(anon.rpc('create_database', { p_name: 'ZZ No Code', p_password: 'x', p_create_code: 'wrong' })))?.message === 'NOT_ALLOWED', 'creating a database with a wrong code is refused');
+  ok((await errorOf(anon.rpc('create_database', { p_name: 'ZZ No Code', p_password: 'x', p_create_code: ADMIN_CODE })))?.message === 'NOT_ALLOWED', 'the admin code does not create databases');
+  ok((await admin.from('app_databases').select('id').eq('name', 'ZZ No Code')).data.length === 0, 'and nothing was created');
 
   // ── lifecycle in throwaway databases ──
   console.log('databases, adding songs, duplicates');
-  const adminNoDb = as(config.passphrase);
+  const adminNoDb = as();
   const mk = async (name) => {
-    const { data, error } = await adminNoDb.rpc('create_database', { p_name: name, p_password: 'pw-' + name });
+    const { data, error } = await adminNoDb.rpc('create_database', { p_name: name, p_password: 'pw-' + name, p_create_code: CREATE_CODE });
     if (error) throw new Error(`create_database ${name}: ${error.message}`);
     const db = { id: data, password: 'pw-' + name };
     createdDbs.push(db.id);
@@ -72,10 +113,12 @@ try {
   };
   const dbA = await mk('ZZ Rules Test A');
   const dbB = await mk('ZZ Rules Test B');
-  ok((await errorOf(adminNoDb.rpc('create_database', { p_name: 'zz rules test a', p_password: 'x' })))?.message === 'NAME_TAKEN', 'database names are unique (any case)');
-  const A = as(config.passphrase, dbA);
-  const B = as(config.passphrase, dbB);
-  ok((await A.from('db_categories').select('id').order('sort_order')).data.map((c) => c.id).join() === 'memorized,performance_confidence,memorization_confidence,genre_2', 'new database starts with only the permanent categories');
+  ok((await errorOf(adminNoDb.rpc('create_database', { p_name: 'zz rules test a', p_password: 'x', p_create_code: CREATE_CODE })))?.message === 'NAME_TAKEN', 'database names are unique (any case)');
+  const A = as(dbA);
+  const B = as(dbB);
+  ok(!!(await errorOf(as({ id: pop.id, password: dbA.password }).from('db_playlists').insert({ db_id: pop.id, name: 'ZZ nope' }))), 'another database\'s password does not open Pop');
+  ok(!!(await errorOf(A.from('db_playlists').insert({ db_id: dbB.id, name: 'ZZ nope' }))), 'an unlocked database cannot write into a different one');
+  ok((await A.from('db_categories').select('id').eq('db_id', dbA.id).order('sort_order')).data.map((c) => c.id).join() === 'memorized,performance_confidence,memorization_confidence,genre_2', 'new database starts with only the permanent categories');
 
   const create = (client, title, artist, extra = {}) =>
     client.rpc('create_song', { p_title: title, p_artist: artist, p_url: '', p_lyrics: '', p_tags: {}, p_confirmed: false, ...extra });
@@ -153,6 +196,16 @@ try {
   ok(rated.data?.play_count === 1 && rated.data.last_rating_label === 'Good', 'rating works through the function');
   ok((await B.rpc('rate_db_song', { p_song_id: firstEntry.id, p_rating_label: 'Great' })).error !== null, 'another database cannot rate it');
 
+  // recordings: the song's own database can save and delete them, nobody else
+  const recPath = `${firstEntry.id}/zz-rec`;
+  const up = await A.storage.from('audio').upload(recPath, new Blob(['zz']));
+  ok(!up.error, `the song's database can upload a recording (${up.error?.message})`);
+  ok(!(await anon.storage.from('audio').download(recPath)).error, 'and anyone can then play it');
+  ok(!!(await errorOf(B.storage.from('audio').upload(`${firstEntry.id}/zz-rec-b`, new Blob(['zz'])))), 'another database cannot upload under that song');
+  ok((await B.storage.from('audio').remove([recPath])).data.length === 0, 'another database cannot delete the recording');
+  const rm = await A.storage.from('audio').remove([recPath]);
+  ok(!rm.error && rm.data.length === 1, 'the song\'s database can delete it');
+
   // B imports A's song: independent state, shared lyrics follow the owner
   const impB = await B.from('db_songs').insert({ db_id: dbB.id, shared_song_id: firstEntry.shared_song_id }).select('*, shared_songs(*)').single();
   ok(!impB.error && impB.data.play_count === 0 && impB.data.last_rating_label === null && impB.data.shared_songs.chord_chart === 'owner lyrics v2', 'B gets A\'s song without A\'s rating, with A\'s lyrics');
@@ -169,9 +222,10 @@ try {
   ok(!r.error && (await admin.from('shared_songs').select('id').eq('id', today.id)).data.length === 1, 'removing an imported song leaves the shared song in place');
   ok(!!(await errorOf(A.rpc('remove_db_song', { p_song_id: (await admin.from('db_songs').select('id').eq('db_id', pop.id).limit(1)).data[0].id }))), 'cannot remove another database\'s song');
 
-  // global functions run for admin, no-op harmlessly on values nobody uses
-  ok(!(await errorOf(adminNoDb.rpc('rename_genre_value', { p_old: 'ZZ Nothing', p_new: 'ZZ Nothing 2' }))), 'admin can run a global genre rename');
-  ok(!(await errorOf(adminNoDb.rpc('rename_rating_label', { p_old: 'ZZ Nothing', p_new: 'ZZ Nothing 2' }))), 'admin can run a global rating rename');
+  // global functions run with the admin code, no-op harmlessly on values nobody uses
+  const adminClient = as(null, ADMIN_CODE);
+  ok(!(await errorOf(adminClient.rpc('rename_genre_value', { p_old: 'ZZ Nothing', p_new: 'ZZ Nothing 2' }))), 'admin can run a global genre rename');
+  ok(!(await errorOf(adminClient.rpc('rename_rating_label', { p_old: 'ZZ Nothing', p_new: 'ZZ Nothing 2' }))), 'admin can run a global rating rename');
 } finally {
   // cleanup: shared songs owned by test databases, then the databases themselves
   for (const id of createdDbs) {

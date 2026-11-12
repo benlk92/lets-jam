@@ -13,7 +13,13 @@ const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
 const dir = join(new URL('./backups', import.meta.url).pathname, `${stamp}${process.argv[2] ? '-' + process.argv[2] : ''}`);
 mkdirSync(join(dir, 'audio'), { recursive: true });
 
-const TABLES = ['songs', 'categories', 'rating_scale', 'app_config', 'playlists', 'playlist_songs', 'playlist_leaders'];
+const TABLES = [
+  // Live since the multi-database cutover
+  'app_databases', 'shared_songs', 'db_songs', 'db_categories', 'db_playlists',
+  'db_playlist_songs', 'db_playlist_leaders', 'global_settings', 'rating_scale', 'app_config',
+  // Legacy tables, kept as a fallback
+  'songs', 'categories', 'playlists', 'playlist_songs', 'playlist_leaders',
+];
 const manifest = { createdAt: new Date().toISOString(), tables: {}, audioFiles: 0 };
 
 for (const table of TABLES) {
