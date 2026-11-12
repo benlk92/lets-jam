@@ -98,7 +98,7 @@ export default function Databases({
         </button>
       )}
 
-      <h1>Let's Jam 🎸</h1>
+      <h1>Do you know this one? 🎸</h1>
       <p className="modal-subtitle">Pick a database to browse it. Changing anything in one needs its password.</p>
 
       <ul className="song-list">

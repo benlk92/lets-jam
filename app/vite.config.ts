@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: "Let's Jam",
-        short_name: "Let's Jam",
+        name: "Do you know this one?",
+        short_name: "Do you know this one?",
         description: 'Live song-leading and repertoire tracking',
         theme_color: '#8a3ffc',
         background_color: '#faf9fb',
