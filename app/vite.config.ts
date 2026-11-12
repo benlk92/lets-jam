@@ -14,7 +14,7 @@ export default defineConfig({
         short_name: "Do you know this one?",
         description: 'Live song-leading and repertoire tracking',
         theme_color: '#8a3ffc',
-        background_color: '#faf9fb',
+        background_color: '#1a1326',
         display: 'standalone',
         start_url: '/',
         icons: [
