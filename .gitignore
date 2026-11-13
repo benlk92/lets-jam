@@ -8,3 +8,4 @@ scripts/node_modules
 
 # Local data backups (contain song data, recordings, and the app passphrase) — never commit.
 scripts/backups/
+database_exports/
