@@ -553,6 +553,66 @@ export async function searchLibrary(query: string): Promise<LibrarySong[]> {
   }));
 }
 
+// --- Browsing the whole shared library (works without a database open) ---
+
+export interface LibraryEntry {
+  sharedSongId: string;
+  title: string;
+  artist: string;
+  genre: string | null;
+}
+
+// Reads are open to everyone, but a request returns at most 1000 rows, so the
+// library is fetched a page at a time.
+async function fetchAllRows<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const PAGE = 1000;
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await fetchPage(from, from + PAGE - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE) return rows;
+  }
+}
+
+export async function fetchLibrary(): Promise<LibraryEntry[]> {
+  const rows = await fetchAllRows<{ id: string; title: string; artist: string; genre: string | null }>(
+    (from, to) =>
+      getSupabaseClient()
+        .from('shared_songs')
+        .select('id, title, artist, genre')
+        .order('title')
+        .order('id')
+        .range(from, to),
+  );
+  return rows.map((r) => ({ sharedSongId: r.id, title: r.title, artist: r.artist, genre: r.genre }));
+}
+
+// The shared songs a given database already has (any database, not only the open one).
+export async function fetchDatabaseSongIds(databaseId: string): Promise<Set<string>> {
+  const rows = await fetchAllRows<{ shared_song_id: string }>((from, to) =>
+    getSupabaseClient()
+      .from('db_songs')
+      .select('shared_song_id')
+      .eq('db_id', databaseId)
+      .order('shared_song_id')
+      .range(from, to),
+  );
+  return new Set(rows.map((r) => r.shared_song_id));
+}
+
+// Adds a shared song to a specific database. The request must be carrying that
+// database's password (see setDatabaseCredentials), so the server accepts it.
+// Already being there counts as success.
+export async function addSongToDatabase(databaseId: string, sharedSongId: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('db_songs')
+    .insert({ db_id: databaseId, shared_song_id: sharedSongId });
+  if (error && error.code !== '23505') throw error;
+}
+
 // Brings an existing shared song into the open database with only the bare
 // essentials — no tags and no stats carry over from any other database.
 export async function addLibrarySong(sharedSongId: string): Promise<Song[]> {

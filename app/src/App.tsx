@@ -24,6 +24,7 @@ import {
   deleteCategoryValue,
   DuplicateSongError,
   findSongMatches,
+  addSongToDatabase,
   checkAdminCode,
   getGenreValues,
   listDatabases,
@@ -95,6 +96,7 @@ import ChordChartViewer from './screens/ChordChartViewer';
 import GapFill from './screens/GapFill';
 import Settings from './screens/Settings';
 import Databases from './screens/Databases';
+import Library from './screens/Library';
 import GlobalSettings from './screens/GlobalSettings';
 import AddSong from './screens/AddSong';
 import SongQueue from './screens/SongQueue';
@@ -111,6 +113,7 @@ type Screen =
   | 'loading'
   | 'databases'
   | 'globalSettings'
+  | 'library'
   | 'picker'
   | 'scatter'
   | 'pickerChooser'
@@ -468,6 +471,40 @@ export default function App() {
     saveDbKeys(keys);
     await openDatabase(target, password);
     return null;
+  }
+
+  // Library browsing: verifies and remembers a database's password without
+  // opening that database.
+  async function handleUnlockForLibrary(target: DatabaseInfo, password: string): Promise<string | null> {
+    try {
+      if (!(await unlockDatabase(target.id, password))) return "That password didn't work — try again.";
+    } catch (err) {
+      if (isNetworkError(err)) return "Can't verify right now — check your connection and try again.";
+      return "That password didn't work — try again.";
+    }
+    const keys = { ...loadDbKeys(), [target.id]: password };
+    setDbKeys(keys);
+    saveDbKeys(keys);
+    return null;
+  }
+
+  // Adds a shared song to any database this device has the password for, then
+  // puts the request credentials back the way they were for the open database.
+  async function handleAddToDatabase(targetId: string, sharedSongId: string): Promise<boolean> {
+    const password = loadDbKeys()[targetId];
+    if (!password) return false;
+    const openKey = database && canEdit ? loadDbKeys()[database.id] : undefined;
+    try {
+      setDatabaseCredentials({ id: targetId, password });
+      await addSongToDatabase(targetId, sharedSongId);
+      if (database?.id === targetId) setSongs(await getSongs());
+      return true;
+    } catch (err) {
+      window.alert(isNetworkError(err) ? 'No connection — try again when you are back online.' : 'Could not add that song.');
+      return false;
+    } finally {
+      setDatabaseCredentials(database && openKey ? { id: database.id, password: openKey } : null);
+    }
   }
 
   // Opens a database: editable if this device has its password and the server
@@ -1325,7 +1362,19 @@ export default function App() {
           onUnlock={handleUnlockDatabase}
           onCreate={handleCreateDatabase}
           onOpenGlobalSettings={() => handleOpenGlobalSettings('databases')}
+          onBrowseLibrary={() => goScreen('library')}
           onBack={database ? () => goScreen('results') : null}
+        />
+      )}
+
+      {screen === 'library' && (
+        <Library
+          databases={databases}
+          unlockedIds={new Set(Object.keys(dbKeys))}
+          initialDatabaseId={database?.id ?? loadLastDb()}
+          onUnlock={handleUnlockForLibrary}
+          onAdd={handleAddToDatabase}
+          onBack={() => goScreen('databases')}
         />
       )}
 

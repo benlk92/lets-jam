@@ -12,6 +12,7 @@ interface DatabasesProps {
   onUnlock: (database: DatabaseInfo, password: string) => Promise<string | null>;
   onCreate: (name: string, password: string, createCode: string, ugSearchFallback: boolean) => Promise<string | null>;
   onOpenGlobalSettings: () => void;
+  onBrowseLibrary: () => void;
   onBack: (() => void) | null;
 }
 
@@ -69,6 +70,7 @@ export default function Databases({
   onUnlock,
   onCreate,
   onOpenGlobalSettings,
+  onBrowseLibrary,
   onBack,
 }: DatabasesProps) {
   const [unlockingId, setUnlockingId] = useState<string | null>(null);
@@ -186,6 +188,10 @@ export default function Databases({
           )}
         </section>
       )}
+
+      <button type="button" className="btn btn-ghost" onClick={onBrowseLibrary}>
+        Browse all songs
+      </button>
 
       <button type="button" className="btn btn-link" onClick={onOpenGlobalSettings}>
         Global settings

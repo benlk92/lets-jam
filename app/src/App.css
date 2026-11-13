@@ -1804,3 +1804,61 @@
   background: var(--surface-muted, rgba(138, 63, 252, 0.08));
   font-size: 0.9rem;
 }
+
+/* Library browser */
+
+.library-active {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.library-active select,
+.library-filters select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+}
+
+.library-lock {
+  font-size: 13px;
+}
+
+.library-filters {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.library-count {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+/* Songs the active database already has: present but quiet. */
+.library-row-have .match-info {
+  opacity: 0.45;
+}
+
+.library-have {
+  color: var(--text-muted);
+  opacity: 0.7;
+  font-size: 15px;
+  padding: 0 10px;
+  flex-shrink: 0;
+}
+
+.library-add {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--accent);
+  flex-shrink: 0;
+}
