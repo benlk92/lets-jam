@@ -155,6 +155,23 @@ try {
   m = await probe('You Are Safe Now', 'Ríomas Amini');
   ok(m[0]?.tier === 'exact', 'accents are ignored when matching');
 
+  // ── filling empty charts (Import charts from files) ──
+  console.log('filling empty charts');
+  const chartless = await create(B, 'ZZ Chartless', 'ZZ Chart Artist');
+  const chartlessId = chartless.data.shared_song_id;
+  const chartOf = async (id) => (await admin.from('shared_songs').select('chord_chart').eq('id', id).single()).data.chord_chart;
+  ok(!!(await errorOf(as().rpc('fill_empty_chart', { p_shared_song_id: chartlessId, p_chart: 'x' }))), 'filling a chart needs an unlocked database');
+  ok(!!(await errorOf(as({ ...dbA, password: 'wrong' }).rpc('fill_empty_chart', { p_shared_song_id: chartlessId, p_chart: 'x' }))), 'filling a chart with a wrong password is refused');
+  let fill = await A.rpc('fill_empty_chart', { p_shared_song_id: chartlessId, p_chart: '   D  A\nline' });
+  ok(fill.data === true && (await chartOf(chartlessId)) === '   D  A\nline', 'any unlocked database can fill an empty chart, keeping the first line\'s indentation');
+  fill = await B.rpc('fill_empty_chart', { p_shared_song_id: chartlessId, p_chart: 'replacement' });
+  ok(fill.data === false && (await chartOf(chartlessId)) === '   D  A\nline', 'a chart that exists is never replaced, even by the owner');
+  fill = await A.rpc('fill_empty_chart', { p_shared_song_id: firstEntry.shared_song_id, p_chart: 'replacement' });
+  ok(fill.data === false && (await chartOf(firstEntry.shared_song_id)) === 'ZZ lyrics', 'an existing chart on a song created with lyrics is not replaced');
+  const blank = await create(B, 'ZZ Quux Zorp', 'ZZ Wibble Person');
+  fill = await A.rpc('fill_empty_chart', { p_shared_song_id: blank.data.shared_song_id, p_chart: '  \n ' });
+  ok(fill.data === false && !(await chartOf(blank.data.shared_song_id)), 'a blank chart is not stored');
+
   // ── importing and per-database independence ──
   console.log('importing, unlinking, ownership');
   const { data: today } = await admin.from('shared_songs').select('id,title,owner_db,genre,chord_chart').eq('title', 'Today').single();

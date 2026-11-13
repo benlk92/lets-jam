@@ -27,6 +27,7 @@ interface AddSongProps {
   // Creates a brand-new song. Rejects with DuplicateSongError when the library
   // already has something that looks like it; resolves once saved.
   onSave: (input: NewSongInput, confirmedDifferent: boolean) => Promise<void>;
+  onImportCharts: () => void;
 }
 
 function MatchList({
@@ -74,6 +75,7 @@ export default function AddSong({
   onAddExisting,
   onFindMatches,
   onSave,
+  onImportCharts,
 }: AddSongProps) {
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
@@ -189,6 +191,10 @@ export default function AddSong({
         Songs are shared between databases. Check the library first — if the song is already there, add it instead of
         creating it again.
       </p>
+
+      <button type="button" className="btn btn-ghost" onClick={onImportCharts}>
+        Import charts from files
+      </button>
 
       <section className="tag-editor-row">
         <h3>Find it in the shared library</h3>

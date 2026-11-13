@@ -1862,3 +1862,47 @@
   color: var(--accent);
   flex-shrink: 0;
 }
+
+/* Import charts */
+
+.import-row {
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.import-row-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.import-row-main > input[type='checkbox'] {
+  margin-top: 4px;
+}
+
+.import-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.import-status {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.import-status-error {
+  color: var(--danger);
+}
+
+.import-choice {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  max-width: 100%;
+}

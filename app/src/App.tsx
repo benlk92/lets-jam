@@ -99,6 +99,7 @@ import Databases from './screens/Databases';
 import Library from './screens/Library';
 import GlobalSettings from './screens/GlobalSettings';
 import AddSong from './screens/AddSong';
+import ImportCharts from './screens/ImportCharts';
 import SongQueue from './screens/SongQueue';
 import Playlists from './screens/Playlists';
 import PlaylistDetailScreen from './screens/PlaylistDetail';
@@ -123,6 +124,7 @@ type Screen =
   | 'gapfill'
   | 'settings'
   | 'addsong'
+  | 'importCharts'
   | 'queue'
   | 'playlists'
   | 'playlistDetail'
@@ -1513,10 +1515,19 @@ export default function App() {
           songs={songs}
           backLabel={addSongOrigin === 'results' ? 'Back to results' : 'Back to settings'}
           onCancel={() => goScreen(addSongOrigin)}
+          onImportCharts={() => goScreen('importCharts')}
           onSearchLibrary={searchLibrary}
           onAddExisting={handleAddExistingSong}
           onFindMatches={findSongMatches}
           onSave={handleCreateSong}
+        />
+      )}
+
+      {screen === 'importCharts' && database && (
+        <ImportCharts
+          database={database}
+          onBack={() => goScreen('addsong')}
+          onImported={async () => setSongs(await getSongs())}
         />
       )}
 

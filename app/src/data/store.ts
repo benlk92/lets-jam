@@ -509,6 +509,60 @@ export async function createSong(
   return getSongs();
 }
 
+// --- Importing chart files ---
+
+// Which of these shared songs already have a chord chart.
+export async function fetchChartPresence(sharedSongIds: string[]): Promise<Set<string>> {
+  const have = new Set<string>();
+  for (let i = 0; i < sharedSongIds.length; i += 50) {
+    const { data, error } = await getSupabaseClient()
+      .from('shared_songs')
+      .select('id, chord_chart')
+      .in('id', sharedSongIds.slice(i, i + 50));
+    if (error) throw error;
+    for (const row of data ?? []) if ((row.chord_chart ?? '').trim()) have.add(row.id);
+  }
+  return have;
+}
+
+// Puts a chart on a shared song only if it has none; resolves false when it
+// already had one (or the chart was blank).
+export async function fillEmptyChart(sharedSongId: string, chart: string): Promise<boolean> {
+  const { data, error } = await getSupabaseClient().rpc('fill_empty_chart', {
+    p_shared_song_id: sharedSongId,
+    p_chart: chart,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
+// Creates a song with its chart, kept exactly as given (create_song itself
+// trims the first line's indentation, which would shift a chord line).
+export async function createSongWithChart(
+  title: string,
+  artist: string,
+  chart: string,
+  confirmedDifferent: boolean,
+): Promise<void> {
+  const { data, error } = await getSupabaseClient().rpc('create_song', {
+    p_title: title,
+    p_artist: artist,
+    p_url: '',
+    p_lyrics: '',
+    p_tags: {},
+    p_confirmed: confirmedDifferent,
+  });
+  if (error) {
+    if (error.message === 'DUPLICATE_EXACT' || error.message === 'DUPLICATE_SIMILAR') {
+      const matches = (JSON.parse(error.details ?? '[]') as unknown[]).map(mapMatch);
+      throw new DuplicateSongError(error.message === 'DUPLICATE_EXACT' ? 'exact' : 'similar', matches);
+    }
+    throw error;
+  }
+  const sharedId = data?.shared_songs?.id as string | undefined;
+  if (sharedId) await fillEmptyChart(sharedId, chart);
+}
+
 export interface LibrarySong {
   sharedSongId: string;
   title: string;
