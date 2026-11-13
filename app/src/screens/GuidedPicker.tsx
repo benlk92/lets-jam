@@ -78,8 +78,8 @@ export default function GuidedPicker({
           large
           singleSelect
         />
-        <button type="button" className="picker-skip" onClick={goNext}>
-          Skip
+        <button type="button" className="chip picker-skip" onClick={goNext}>
+          {category.skipLabel || 'Skip'}
         </button>
       </div>
 

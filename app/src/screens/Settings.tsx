@@ -21,6 +21,7 @@ interface SettingsProps {
   onDeleteValue: (categoryId: string, value: string) => void;
   onAddValue: (categoryId: string, value: string) => void;
   onReorderValue: (categoryId: string, orderedValues: string[]) => void;
+  onChangeSkipLabel: (categoryId: string, label: string) => void;
   onStartGapFill: (categoryId: string) => void;
   onOpenAddSong: () => void;
   scrollSpeeds: ScrollSpeeds;
@@ -76,6 +77,7 @@ export default function Settings({
   onDeleteValue,
   onAddValue,
   onReorderValue,
+  onChangeSkipLabel,
   onStartGapFill,
   onOpenAddSong,
   scrollSpeeds,
@@ -403,6 +405,7 @@ export default function Settings({
           onDelete={(value) => onDeleteValue(valuesModalCategory.id, value)}
           onAdd={(value) => onAddValue(valuesModalCategory.id, value)}
           onReorder={(orderedValues) => onReorderValue(valuesModalCategory.id, orderedValues)}
+          onChangeSkipLabel={(label) => onChangeSkipLabel(valuesModalCategory.id, label)}
           onClose={() => setValuesModalCategoryId(null)}
         />
       )}

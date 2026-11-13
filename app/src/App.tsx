@@ -45,6 +45,7 @@ import {
   renameCategoryValue,
   reorderCategories,
   reorderCategoryValues,
+  setCategorySkipLabel,
   retireCategory,
   setCategoryGuidedPickerEnabled,
   setCategoryScatterPickerEnabled,
@@ -1209,6 +1210,10 @@ export default function App() {
     await runOrAlertOffline(async () => setCategories(await reorderCategoryValues(categoryId, orderedValues)));
   }
 
+  async function handleChangeSkipLabel(categoryId: string, label: string) {
+    await runOrAlertOffline(async () => setCategories(await setCategorySkipLabel(categoryId, label)));
+  }
+
   async function handleAddRating(label: string, intervalDays: number) {
     await runOrAlertOffline(async () => setRatingScale(await addRatingEntry(label, intervalDays)));
   }
@@ -1436,6 +1441,7 @@ export default function App() {
           onDeleteValue={handleDeleteValue}
           onAddValue={handleAddCategoryValue}
           onReorderValue={handleReorderValues}
+          onChangeSkipLabel={handleChangeSkipLabel}
           onStartGapFill={startGapFill}
           onOpenAddSong={() => {
             setAddSongOrigin('settings');

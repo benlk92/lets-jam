@@ -91,6 +91,7 @@ function mapCategoryRow(row: any): Category {
     guidedPickerEnabled: row.guided_picker_enabled,
     scatterPickerEnabled: row.scatter_picker_enabled,
     values: row.values ?? [],
+    skipLabel: row.skip_label ?? undefined,
   };
 }
 
@@ -794,6 +795,19 @@ export async function setCategoryGuidedPickerEnabled(categoryId: string, enabled
   const { error } = await getSupabaseClient()
     .from('db_categories')
     .update({ guided_picker_enabled: enabled })
+    .eq('id', categoryId)
+    .eq('db_id', currentDb);
+  if (error) throw error;
+  return getCategories();
+}
+
+// The Guided Picker's "Skip" button text for one category. Blank (or the
+// default "Skip") is stored as null so the default stays a single source.
+export async function setCategorySkipLabel(categoryId: string, label: string): Promise<Category[]> {
+  const trimmed = label.trim();
+  const { error } = await getSupabaseClient()
+    .from('db_categories')
+    .update({ skip_label: trimmed && trimmed !== 'Skip' ? trimmed : null })
     .eq('id', categoryId)
     .eq('db_id', currentDb);
   if (error) throw error;

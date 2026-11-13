@@ -208,7 +208,7 @@
   overflow-y: auto;
 }
 
-.picker-skip {
+.chip.picker-skip {
   display: block;
   width: 100%;
   text-align: left;
@@ -216,11 +216,6 @@
   padding: 16px 20px;
   font-size: 17px;
   min-height: 54px;
-  border: 1px dashed var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  border-radius: 999px;
-  cursor: pointer;
 }
 
 .picker-actions {
@@ -1377,6 +1372,12 @@
   padding: 10px;
   background: var(--surface);
   color: var(--text);
+}
+
+.value-row-note {
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 /* Playlists */

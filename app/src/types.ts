@@ -22,6 +22,8 @@ export interface Category {
   // screen. Opt-in (defaults false) — unlike guidedPickerEnabled, an unset
   // value here means "not shown."
   scatterPickerEnabled?: boolean;
+  // Text of this category's Guided Picker "Skip" button; unset means "Skip".
+  skipLabel?: string;
   // Values explicitly registered via Settings' "Values" screen — merged with
   // whatever songs currently carry, so a value can exist as a selectable
   // option before any song has been tagged with it yet.

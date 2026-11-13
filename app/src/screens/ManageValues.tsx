@@ -9,6 +9,8 @@ interface ManageValuesProps {
   onDelete: (value: string) => void;
   onAdd: (value: string) => void;
   onReorder: (orderedValues: string[]) => void;
+  // Only for per-database categories: the Guided Picker's "Skip" button text.
+  onChangeSkipLabel?: (label: string) => void;
   onClose: () => void;
 }
 
@@ -16,7 +18,7 @@ function songsWithValue(songs: Song[], categoryId: string, value: string): numbe
   return songs.filter((song) => song.tags[categoryId] === value).length;
 }
 
-export default function ManageValues({ category, songs, onRename, onDelete, onAdd, onReorder, onClose }: ManageValuesProps) {
+export default function ManageValues({ category, songs, onRename, onDelete, onAdd, onReorder, onChangeSkipLabel, onClose }: ManageValuesProps) {
   const values = categoryValues(songs, category.id, undefined, category.values);
   const [newValue, setNewValue] = useState('');
 
@@ -70,6 +72,9 @@ export default function ManageValues({ category, songs, onRename, onDelete, onAd
               onMove={move}
             />
           ))}
+          {onChangeSkipLabel && (
+            <SkipRow key={category.skipLabel ?? ''} label={category.skipLabel ?? 'Skip'} onChange={onChangeSkipLabel} />
+          )}
           <div className="settings-add-row">
             <input
               className="settings-add-name"
@@ -145,6 +150,29 @@ function ValueRow({
       <button type="button" className="icon-button" onClick={() => onDelete(value)} aria-label={`Delete ${value}`}>
         ×
       </button>
+    </div>
+  );
+}
+
+// The Guided Picker's "Skip" option shown as the last entry of the list: it
+// can be renamed but not removed or reordered (it always comes last).
+function SkipRow({ label, onChange }: { label: string; onChange: (label: string) => void }) {
+  const [draft, setDraft] = useState(label);
+
+  return (
+    <div className="value-row value-row-skip">
+      <input
+        className="value-row-input"
+        value={draft}
+        aria-label="Skip button text"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const trimmed = draft.trim() || 'Skip';
+          setDraft(trimmed);
+          if (trimmed !== label) onChange(trimmed);
+        }}
+      />
+      <span className="value-row-note">Skip button</span>
     </div>
   );
 }
